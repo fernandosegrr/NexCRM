@@ -15,7 +15,7 @@ import { BotToggle } from "./bot-toggle";
 
 function MessagesSkeleton() {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-3 py-2">
+    <div className="flex flex-col gap-3 py-2">
       {[
         { side: "left", w: "w-48" },
         { side: "right", w: "w-56" },
@@ -133,7 +133,7 @@ export function ConversationView({
             <p className="text-sm">Aún no hay mensajes con este contacto.</p>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             {messages.map((m, i) => {
               const isBot = m.rol === "bot";
               const showDay =
