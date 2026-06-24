@@ -82,7 +82,7 @@ export default async function BusinessDetailPage({
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    "https://crm.nexai.mx";
+    "https://postgres-nexcrm.d6cr6o.easypanel.host";
 
   return (
     <div className="space-y-8">

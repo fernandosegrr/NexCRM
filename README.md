@@ -5,6 +5,10 @@ CRM multi-tenant para centralizar las conversaciones de los bots de **WhatsApp**
 - **ADMIN (NexAI):** ve y gestiona todo — negocios, usuarios y mensajes.
 - **CLIENTE:** solo ve las conversaciones de su(s) negocio(s) y puede pausar/activar el bot por contacto.
 
+**Producción:** https://postgres-nexcrm.d6cr6o.easypanel.host ·
+**Documentación:** [`docs/`](docs/) ·
+**Contexto para IA:** [`.agent/context.md`](.agent/context.md)
+
 ---
 
 ## Stack
@@ -50,8 +54,8 @@ N8N_DATABASE_URL="postgresql://USER:PASS@HOST:PORT/postgres"
 AUTH_SECRET="..."          # openssl rand -base64 32  (o npx auth secret)
 NEXTAUTH_SECRET="..."      # mismo valor que AUTH_SECRET
 AUTH_TRUST_HOST="true"
-NEXTAUTH_URL="https://crm.nexai.mx"
-NEXT_PUBLIC_APP_URL="https://crm.nexai.mx"
+NEXTAUTH_URL="https://postgres-nexcrm.d6cr6o.easypanel.host"
+NEXT_PUBLIC_APP_URL="https://postgres-nexcrm.d6cr6o.easypanel.host"
 
 # Opcionales (recomendadas para producción)
 MESSAGES_INGEST_TOKEN=""   # si se define, POST /api/messages exige Bearer token
@@ -134,8 +138,8 @@ Si defines `MESSAGES_INGEST_TOKEN`, añade en el nodo HTTP Request el header `Au
 
 1. Crea una app apuntando a este repositorio (o sube la imagen construida con el `Dockerfile`).
 2. Define las **variables de entorno** del CRM (las de arriba): `DATABASE_URL`, `N8N_DATABASE_URL`, `AUTH_SECRET`/`NEXTAUTH_SECRET` y `NEXTAUTH_URL`.
-3. Define el **build arg** `NEXT_PUBLIC_APP_URL` (= tu dominio, p. ej. `https://crm.nexai.mx`) para que los snippets de n8n muestren la URL correcta.
-4. Puerto interno: **3000**. Asocia tu dominio (`crm.nexai.mx`) al servicio.
+3. Define el **build arg** `NEXT_PUBLIC_APP_URL` (= tu dominio, p. ej. `https://postgres-nexcrm.d6cr6o.easypanel.host`) para que los snippets de n8n muestren la URL correcta.
+4. Puerto interno: **3000**. Asocia tu dominio (`postgres-nexcrm.d6cr6o.easypanel.host`) al servicio.
 5. La primera vez, aplica el esquema y el seed contra la BD de producción:
    ```bash
    npm run db:push
