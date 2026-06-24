@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
 import { BotToggle } from "./bot-toggle";
+import { ReplyInput } from "./reply-input";
 
 function MessagesSkeleton() {
   return (
@@ -44,6 +45,23 @@ export function ConversationView({
   const [messages, setMessages] = useState<MessageDTO[] | null>(null);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
+
+  function handleReplySent(msg: { id: string; contenido: string; enviadoAt: string }) {
+    const newMsg: MessageDTO = {
+      id: msg.id,
+      instanciaId: contact.instanciaId,
+      businessId: "",
+      nombreNegocio: "",
+      canal: contact.canal,
+      uidUsuario: contact.uidUsuario,
+      rol: "human",
+      contenido: msg.contenido,
+      tipoMedia: "text",
+      enviadoAt: msg.enviadoAt,
+      latenciaMs: null,
+    };
+    setMessages((prev) => (prev ? [...prev, newMsg] : [newMsg]));
+  }
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -136,6 +154,7 @@ export function ConversationView({
           <div className="flex flex-col gap-1.5">
             {messages.map((m, i) => {
               const isBot = m.rol === "bot";
+              const isHuman = m.rol === "human";
               const showDay =
                 i === 0 ||
                 dayLabel(messages[i - 1].enviadoAt) !== dayLabel(m.enviadoAt);
@@ -154,7 +173,7 @@ export function ConversationView({
                     transition={{ duration: 0.18, ease: "easeOut" }}
                     className={cn(
                       "flex",
-                      isBot ? "justify-end" : "justify-start",
+                      isBot || isHuman ? "justify-end" : "justify-start",
                     )}
                   >
                     <div
@@ -162,7 +181,9 @@ export function ConversationView({
                         "max-w-[82%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%]",
                         isBot
                           ? "rounded-br-md bg-primary text-primary-foreground"
-                          : "rounded-bl-md bg-secondary text-secondary-foreground",
+                          : isHuman
+                            ? "rounded-br-md bg-emerald-700 text-white"
+                            : "rounded-bl-md bg-secondary text-secondary-foreground",
                       )}
                     >
                       <p className="whitespace-pre-wrap break-words">
@@ -175,8 +196,8 @@ export function ConversationView({
                       <p
                         className={cn(
                           "mt-1 text-right text-[10px]",
-                          isBot
-                            ? "text-primary-foreground/70"
+                          isBot || isHuman
+                            ? "text-white/70"
                             : "text-muted-foreground",
                         )}
                       >
@@ -191,6 +212,13 @@ export function ConversationView({
           </div>
         )}
       </div>
+
+      <ReplyInput
+        instanciaId={contact.instanciaId}
+        uidUsuario={contact.uidUsuario}
+        canal={contact.canal}
+        onSent={handleReplySent}
+      />
     </div>
   );
 }

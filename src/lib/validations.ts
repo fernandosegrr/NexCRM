@@ -47,7 +47,7 @@ export const incomingMessageSchema = z.object({
   instanciaId: z.string().min(1).max(200),
   canal: z.string().min(1).max(50),
   uidUsuario: z.string().min(1).max(200),
-  rol: z.enum(["user", "bot"]),
+  rol: z.enum(["user", "bot", "human"]),
   contenido: z.string().max(8000).nullish(),
   tipoMedia: z.string().max(50).nullish(),
   latenciaMs: z.coerce.number().int().min(0).max(3_600_000).nullish(),
