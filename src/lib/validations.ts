@@ -42,16 +42,16 @@ export const updateUserSchema = z.object({
   activo: z.boolean(),
 });
 
-// Payload entrante del webhook de n8n
+// Payload entrante del webhook de n8n (con límites para evitar abuso)
 export const incomingMessageSchema = z.object({
-  instanciaId: z.string().min(1),
-  canal: z.string().min(1),
-  uidUsuario: z.string().min(1),
+  instanciaId: z.string().min(1).max(200),
+  canal: z.string().min(1).max(50),
+  uidUsuario: z.string().min(1).max(200),
   rol: z.enum(["user", "bot"]),
-  contenido: z.string().nullish(),
-  tipoMedia: z.string().nullish(),
-  latenciaMs: z.coerce.number().int().nullish(),
-  metadata: z.any().nullish(),
+  contenido: z.string().max(8000).nullish(),
+  tipoMedia: z.string().max(50).nullish(),
+  latenciaMs: z.coerce.number().int().min(0).max(3_600_000).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
 });
 export type IncomingMessage = z.infer<typeof incomingMessageSchema>;
 

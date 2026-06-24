@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { ArrowLeft, MessageSquare, RotateCw, WifiOff } from "lucide-react";
 
 import type { ConversationContact, MessageDTO } from "@/lib/data";
 import { avatarColor, dayLabel, initialOf, timeOnly } from "@/lib/format";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
@@ -41,34 +42,43 @@ export function ConversationView({
   onBack: () => void;
 }) {
   const [messages, setMessages] = useState<MessageDTO[] | null>(null);
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
     setMessages(null);
+    setError(false);
     const url = `/api/conversations/${encodeURIComponent(
       contact.uidUsuario,
     )}?instanciaId=${encodeURIComponent(contact.instanciaId)}`;
     fetch(url)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("bad status");
+        return r.json();
+      })
       .then((d) => {
         if (alive) setMessages(d.messages ?? []);
       })
       .catch(() => {
-        if (alive) setMessages([]);
+        if (alive) {
+          setError(true);
+          setMessages([]);
+        }
       });
     return () => {
       alive = false;
     };
-  }, [contact.instanciaId, contact.uidUsuario]);
+  }, [contact.instanciaId, contact.uidUsuario, reload]);
 
   useEffect(() => {
-    if (messages) {
+    if (messages && !error) {
       requestAnimationFrame(() =>
         bottomRef.current?.scrollIntoView({ behavior: "auto" }),
       );
     }
-  }, [messages]);
+  }, [messages, error]);
 
   return (
     <div className="flex h-full flex-col">
@@ -76,7 +86,7 @@ export function ConversationView({
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
           onClick={onBack}
-          className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+          className="flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
           aria-label="Volver"
         >
           <ArrowLeft className="size-5" />
@@ -102,7 +112,20 @@ export function ConversationView({
 
       {/* Mensajes */}
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6">
-        {messages === null ? (
+        {error ? (
+          <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
+            <WifiOff className="mb-3 size-8 opacity-60" />
+            <p className="text-sm">No se pudieron cargar los mensajes.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => setReload((n) => n + 1)}
+            >
+              <RotateCw /> Reintentar
+            </Button>
+          </div>
+        ) : messages === null ? (
           <MessagesSkeleton />
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { incomingMessageSchema } from "@/lib/validations";
@@ -5,11 +6,32 @@ import { incomingMessageSchema } from "@/lib/validations";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Comparación en tiempo constante (evita timing attacks sobre el token)
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 /**
- * Recibe mensajes desde n8n (sin autenticación; la seguridad recae en lo
- * difícil de adivinar del instanciaId). Nunca debe romper el flujo del bot.
+ * Recibe mensajes desde n8n. Si MESSAGES_INGEST_TOKEN está definido, exige
+ * el header `Authorization: Bearer <token>` (o `x-api-key`). Si no está
+ * definido, queda abierto (seguridad por obscuridad del instanciaId).
+ * Nunca debe romper el flujo del bot.
  */
 export async function POST(req: NextRequest) {
+  const expected = process.env.MESSAGES_INGEST_TOKEN;
+  if (expected) {
+    const authz = req.headers.get("authorization") ?? "";
+    const provided = authz.toLowerCase().startsWith("bearer ")
+      ? authz.slice(7)
+      : (req.headers.get("x-api-key") ?? "");
+    if (!provided || !safeEqual(provided, expected)) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+  }
+
   let body: unknown;
   try {
     body = await req.json();

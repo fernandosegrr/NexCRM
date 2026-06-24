@@ -40,11 +40,8 @@ export async function GET(req: NextRequest) {
     const activo = await getBotStatus(instanciaId, uidUsuario);
     return NextResponse.json({ activo });
   } catch {
-    // Si la BD de n8n no responde, asumimos activo por defecto y avisamos
-    return NextResponse.json({
-      activo: true,
-      warning: "No se pudo consultar el estado del bot",
-    });
+    // Si la BD de n8n no responde, estado desconocido (no asumir activo)
+    return NextResponse.json({ activo: null, unavailable: true });
   }
 }
 

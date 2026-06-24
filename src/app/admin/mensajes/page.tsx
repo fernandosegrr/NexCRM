@@ -90,7 +90,7 @@ export default async function MensajesPage({
       ) : (
         <>
           {/* Escritorio */}
-          <div className="hidden overflow-hidden rounded-xl border border-border md:block">
+          <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -129,8 +129,8 @@ export default async function MensajesPage({
             </Table>
           </div>
 
-          {/* Móvil */}
-          <div className="space-y-3 md:hidden">
+          {/* Móvil / tablet */}
+          <div className="space-y-3 lg:hidden">
             {data.rows.map((m) => (
               <div
                 key={m.id}
@@ -161,32 +161,28 @@ export default async function MensajesPage({
               de {data.totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                disabled={data.page <= 1}
-                className={data.page <= 1 ? "pointer-events-none opacity-50" : ""}
-              >
-                <Link href={pageHref(data.page - 1)} aria-label="Página anterior">
+              {data.page <= 1 ? (
+                <Button variant="outline" size="sm" disabled>
                   <ChevronLeft /> Anterior
-                </Link>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                disabled={data.page >= data.totalPages}
-                className={
-                  data.page >= data.totalPages
-                    ? "pointer-events-none opacity-50"
-                    : ""
-                }
-              >
-                <Link href={pageHref(data.page + 1)} aria-label="Página siguiente">
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={pageHref(data.page - 1)} aria-label="Página anterior">
+                    <ChevronLeft /> Anterior
+                  </Link>
+                </Button>
+              )}
+              {data.page >= data.totalPages ? (
+                <Button variant="outline" size="sm" disabled>
                   Siguiente <ChevronRight />
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={pageHref(data.page + 1)} aria-label="Página siguiente">
+                    Siguiente <ChevronRight />
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         </>

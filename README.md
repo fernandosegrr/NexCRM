@@ -52,6 +52,10 @@ NEXTAUTH_SECRET="..."      # mismo valor que AUTH_SECRET
 AUTH_TRUST_HOST="true"
 NEXTAUTH_URL="https://crm.nexai.mx"
 NEXT_PUBLIC_APP_URL="https://crm.nexai.mx"
+
+# Opcionales (recomendadas para producción)
+MESSAGES_INGEST_TOKEN=""   # si se define, POST /api/messages exige Bearer token
+ADMIN_SEED_PASSWORD=""     # contraseña inicial del admin (default: nexai2025)
 ```
 
 ---
@@ -121,6 +125,8 @@ npm run dev
 ### Integración con n8n
 
 En cada nodo de tu flujo agrega un **HTTP Request** apuntando a `NEXT_PUBLIC_APP_URL/api/messages` (`POST`, body JSON, `onError: continueRegularOutput`). En **Admin → Negocios → [negocio]** encontrarás los snippets exactos por canal, listos para copiar/pegar en n8n.
+
+Si defines `MESSAGES_INGEST_TOKEN`, añade en el nodo HTTP Request el header `Authorization: Bearer <token>` (o `x-api-key: <token>`).
 
 ---
 

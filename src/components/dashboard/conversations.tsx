@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessagesSquare, Search, Users } from "lucide-react";
+import { MessagesSquare, RotateCw, Search, Users, WifiOff } from "lucide-react";
 
 import type { ConversationContact } from "@/lib/data";
 import { avatarColor, initialOf, relativeTime, truncate } from "@/lib/format";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
@@ -62,6 +63,23 @@ function Placeholder() {
   );
 }
 
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
+        <WifiOff className="size-6" />
+      </div>
+      <p className="text-sm font-medium">No se pudieron cargar las conversaciones</p>
+      <p className="mt-1 max-w-[15rem] text-xs text-muted-foreground">
+        Revisa tu conexión e inténtalo de nuevo.
+      </p>
+      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+        <RotateCw /> Reintentar
+      </Button>
+    </div>
+  );
+}
+
 export function Conversations() {
   const [contacts, setContacts] = useState<ConversationContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +88,8 @@ export function Conversations() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [selected, setSelected] = useState<ConversationContact | null>(null);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,11 +100,15 @@ export function Conversations() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setError(false);
     const url = `/api/conversations?take=${PAGE}&skip=0${
       debounced ? `&search=${encodeURIComponent(debounced)}` : ""
     }`;
     fetch(url)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("bad status");
+        return r.json();
+      })
       .then((d) => {
         if (!alive) return;
         const c: ConversationContact[] = d.contacts ?? [];
@@ -93,6 +117,7 @@ export function Conversations() {
       })
       .catch(() => {
         if (alive) {
+          setError(true);
           setContacts([]);
           setHasMore(false);
         }
@@ -103,7 +128,7 @@ export function Conversations() {
     return () => {
       alive = false;
     };
-  }, [debounced]);
+  }, [debounced, reloadKey]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -160,6 +185,8 @@ export function Conversations() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <ListSkeleton />
+          ) : error ? (
+            <ErrorState onRetry={() => setReloadKey((n) => n + 1)} />
           ) : contacts.length === 0 ? (
             <EmptyList search={debounced} />
           ) : (
@@ -220,11 +247,14 @@ export function Conversations() {
       <div
         className={cn(
           "min-w-0 flex-1",
-          selected ? "flex" : "hidden md:flex",
+          selected
+            ? "flex max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-background"
+            : "hidden md:flex",
         )}
       >
         {selected ? (
           <ConversationView
+            key={`${selected.instanciaId}::${selected.uidUsuario}`}
             contact={selected}
             onBack={() => setSelected(null)}
           />

@@ -65,7 +65,7 @@ function UsersTable({
   return (
     <>
       {/* Escritorio */}
-      <div className="hidden overflow-hidden rounded-xl border border-border md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -113,8 +113,8 @@ function UsersTable({
         </Table>
       </div>
 
-      {/* Móvil */}
-      <div className="space-y-3 md:hidden">
+      {/* Móvil / tablet */}
+      <div className="space-y-3 lg:hidden">
         {users.map((u) => (
           <div
             key={u.id}

@@ -43,6 +43,7 @@ export function timeOnly(date: Date | string): string {
 /** Etiqueta de día para separadores de chat: "Hoy", "Ayer", "3 jun 2026". */
 export function dayLabel(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "";
   if (isToday(d)) return "Hoy";
   if (isYesterday(d)) return "Ayer";
   return format(d, "d MMM yyyy", { locale: es });
