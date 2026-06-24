@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code').item.json.mensaje_usuario }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0],
+      "name": "CRM · Mensaje del usuario (inicio)",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {}
+}

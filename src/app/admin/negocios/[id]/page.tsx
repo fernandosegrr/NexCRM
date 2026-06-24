@@ -9,6 +9,7 @@ import { isCanal, type Canal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
+import { DownloadButton } from "@/components/download-button";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -50,19 +51,24 @@ function SnippetBlock({
   title,
   rol,
   code,
+  filename,
 }: {
   title: string;
   rol: "user" | "bot";
   code: string;
+  filename: string;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background/50">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <Badge variant={rol === "bot" ? "default" : "muted"}>{rol}</Badge>
           <span className="text-sm font-medium">{title}</span>
         </div>
-        <CopyButton value={code} />
+        <div className="flex items-center gap-1.5">
+          <CopyButton value={code} />
+          <DownloadButton value={code} filename={filename} label=".json" />
+        </div>
       </div>
       <pre className="max-h-72 overflow-auto p-4 text-xs leading-relaxed text-muted-foreground">
         <code>{code}</code>
@@ -160,11 +166,13 @@ export default async function BusinessDetailPage({
                     title="Nodo de inicio"
                     rol="user"
                     code={snippets.inicio}
+                    filename={`crm-${canal}-inicio.json`}
                   />
                   <SnippetBlock
                     title="Nodo final"
                     rol="bot"
                     code={snippets.fin}
+                    filename={`crm-${canal}-fin.json`}
                   />
                 </div>
               </div>

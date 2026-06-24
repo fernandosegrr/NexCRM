@@ -55,11 +55,16 @@ En **Admin → Negocios → Nuevo negocio**:
 
 ## Paso 2 — Importa los nodos en n8n
 
-Tienes **dos opciones** (equivalentes):
+Tienes **tres opciones** (equivalentes):
 
-- **Opción A (recomendada):** en **Admin → Negocios → [negocio]** copia el nodo de
-  inicio y el de fin (botón _Copiar_) y pégalos en el canvas de n8n con `Ctrl/Cmd+V`.
-- **Opción B:** copia el JSON de abajo según el canal y pégalo en el canvas de n8n.
+- **Opción A — desde el CRM:** en **Admin → Negocios → [negocio]**, cada nodo tiene
+  botón **_Copiar_** y **_.json_** (descarga el archivo). Pega con `Ctrl/Cmd+V` o
+  impórtalo en n8n con **⋮ → Import from File…**.
+- **Opción B — archivos del repo:** descarga los `.json` ya listos de la carpeta
+  [`n8n/`](../n8n/) (`whatsapp-inicio.json`, `whatsapp-fin.json`,
+  `instagram-messenger-inicio.json`, `instagram-messenger-fin.json`).
+- **Opción C — copiar de abajo:** copia el JSON del canal correspondiente y pégalo
+  en el canvas de n8n.
 
 > Los nodos son **idénticos para todas las instancias del mismo canal**: el
 > `instanciaId` se resuelve dinámicamente desde el webhook (no está "quemado").
