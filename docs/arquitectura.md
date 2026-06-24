@@ -2,10 +2,10 @@
 
 ## Visión general
 
-NexAI CRM es una app **Next.js 14 (App Router)** que cumple tres funciones:
+NexAI CRM es una app **Next.js 14 (App Router)** con tres funciones:
 
-1. **Ingerir** los mensajes que los bots de n8n intercambian con los usuarios finales.
-2. **Mostrar** esas conversaciones (panel admin para NexAI y dashboard para el cliente).
+1. **Ingerir** los mensajes que los bots de n8n intercambian con los usuarios.
+2. **Mostrar** esas conversaciones (panel admin para NexAI; dashboard para el cliente).
 3. **Controlar** el bot por contacto, escribiendo la tabla `ESTATUS` que n8n consulta.
 
 ```
@@ -15,9 +15,9 @@ NexAI CRM es una app **Next.js 14 (App Router)** que cumple tres funciones:
    └─────────────┘                         │                      │
          ▲                                 │  ┌────────────────┐  │   Prisma
          │  lee ESTATUS (/on /off)         │  │  Server / API  │ ─┼──────────►  BD "crm"
-         │                                 │  └────────────────┘  │  (negocios, usuarios,
-   ┌─────────────┐    escribe ESTATUS      │          │          │   instancias, mensajes)
-   │  BD de n8n  │ ◄───────────────────────┼────── pg │ raw      │
+         │                                 │  └────────────────┘  │  (businesses, users,
+   ┌─────────────┐    escribe ESTATUS      │          │          │   business_instances,
+   │  BD de n8n  │ ◄───────────────────────┼────── pg │ raw      │   messages)
    │  (ESTATUS)  │                         │          ▼          │
    └─────────────┘                         │  Admin / Dashboard   │
                                            └──────────────────────┘
@@ -27,44 +27,60 @@ NexAI CRM es una app **Next.js 14 (App Router)** que cumple tres funciones:
 
 | BD | Variable | Cliente | Contenido |
 |---|---|---|---|
-| `crm` | `DATABASE_URL` | **Prisma 6** | Negocios, instancias, usuarios, mensajes. |
-| n8n (`postgres`) | `N8N_DATABASE_URL` | **pg (raw)** | Solo la tabla `ESTATUS` (estado on/off del bot). |
+| `crm` | `DATABASE_URL` | **Prisma 6** (`src/lib/prisma.ts`) | Negocios, instancias, usuarios, mensajes. |
+| n8n (`postgres`) | `N8N_DATABASE_URL` | **pg** (`src/lib/n8n.ts`) | Solo la tabla `ESTATUS`. |
 
-**Por qué `pg` y no un segundo cliente Prisma:** empaquetar dos engines de Prisma
-en el build `standalone` de Docker es propenso a fallos (el motor nativo no siempre
-se rastrea). Como el acceso a n8n es de **una sola tabla**, se usa SQL parametrizado
-con `pg`. El esquema `prisma/n8n.prisma` queda como **referencia documental**.
+**Por qué `pg` y no un 2º cliente Prisma:** empaquetar dos engines de Prisma en el
+build `standalone` de Docker es frágil (el motor nativo no siempre se rastrea). El
+acceso a n8n es de una sola tabla → SQL parametrizado con `pg`. `prisma/n8n.prisma`
+queda como referencia documental.
 
-> La BD de n8n **nunca** se migra desde el CRM. Solo `SELECT`/`INSERT`/`UPDATE` en `ESTATUS`.
+---
 
-## Flujos principales
+## Recorrido de una petición (con archivos y funciones reales)
 
-### 1. Ingesta de mensajes (n8n → CRM)
-1. n8n hace `POST /api/messages` con `{ instanciaId, canal, uidUsuario, rol, contenido, ... }`.
-2. (Opcional) Se valida el header `Authorization: Bearer <MESSAGES_INGEST_TOKEN>`.
-3. Se busca la `BusinessInstance` por `instanciaId` → se obtiene `businessId` y `nombreNegocio`.
-4. Se **normaliza** el canal usando el de la instancia (n8n puede mandar `page`/`instagram`).
-5. Se inserta el `Message`. Respuesta `201 { id }` o `404` si la instancia no existe.
+### 1) Ingesta de un mensaje (n8n → CRM)
+`n8n` → `POST /api/messages` → `src/app/api/messages/route.ts`:
+1. `safeEqual()` valida `Authorization: Bearer` **si** `MESSAGES_INGEST_TOKEN` está definido.
+2. `incomingMessageSchema.safeParse()` (`src/lib/validations.ts`) valida y limita el body.
+3. `prisma.businessInstance.findFirst({ where: { instanciaId } })` resuelve el negocio.
+4. Se **normaliza** el canal con `inst.canal` y se hace `prisma.message.create(...)`.
+5. Respuesta `201 { id }` (BigInt → string) o `404` si la instancia no existe.
 
-### 2. Dashboard del cliente (lectura + control del bot)
-1. El cliente entra a `/dashboard`; el componente carga contactos con
-   `GET /api/conversations` (scroll infinito) y mensajes con
-   `GET /api/conversations/[uidUsuario]`.
-2. El toggle del bot lee `GET /api/bot-status` y escribe `POST /api/bot-status`,
-   que hacen `SELECT`/upsert sobre `ESTATUS`.
-3. La autorización fuerza que el cliente solo vea su propio `businessId`.
+### 2) Dashboard del cliente
+`/dashboard` (`src/app/dashboard/page.tsx`, valida sesión y `businessId`) →
+`<Conversations>` (cliente):
+- **Lista:** `fetch('/api/conversations')` → `getConversations()` (`src/lib/data.ts`,
+  query `DISTINCT ON` para el último mensaje por contacto) → render con scroll infinito.
+- **Chat:** al elegir contacto, `fetch('/api/conversations/[uid]')` →
+  `getConversationMessages()` → burbujas con Framer Motion.
+- **Toggle bot:** `<BotToggle>` hace `GET/POST /api/bot-status` →
+  `authorizeInstance()` + `getBotStatus()`/`setBotStatus()` (`pg` sobre `ESTATUS`).
 
-### 3. Autenticación
-- NextAuth v5 con proveedor de **credenciales** y sesión **JWT**.
-- El JWT lleva `rol` y `businessId`; `middleware.ts` protege `/admin` y `/dashboard`.
-- Las páginas y las Server Actions revalidan rol como defensa en profundidad.
+### 3) Login y sesión
+`/login` → `<LoginForm>` → server action `authenticate()` (`src/app/actions/auth.ts`)
+→ `signIn('credentials')` → `authorize()` en `src/auth.ts` (busca el usuario con
+Prisma, compara con `bcrypt`, valida `activo`) → callback `jwt` mete `rol`/`businessId`
+en el token → `session` los expone → `redirect('/')` enruta por rol.
 
-## Decisiones técnicas
+### 4) Protección de rutas
+`src/middleware.ts` corre el callback `authorized` (`src/auth.config.ts`):
+- `/admin/*` exige `rol === ADMIN`; un CLIENTE se redirige a `/dashboard`.
+- `/dashboard/*` exige sesión; un ADMIN se redirige a `/admin`.
+- `/api/*` queda **fuera** del middleware → cada handler valida por su cuenta.
 
-- **Server Components + Server Actions** para el admin (mutaciones sin API propia).
-- **Rutas API** para el dashboard (carga incremental desde el cliente).
-- **Tema oscuro** con tokens CSS (HSL) mapeados en Tailwind; componentes shadcn copiados a `src/components/ui`.
-- **Salida `standalone`** de Next para una imagen Docker mínima.
-- **Match tolerante** del `"ID"` de WhatsApp en `ESTATUS` (compara la parte previa a `@`).
+---
 
-Ver decisiones no obvias en [`../.agent/context.md`](../.agent/context.md) (sección _Gotchas_).
+## Decisiones técnicas (resumen)
+
+| Decisión | Razón |
+|---|---|
+| Server Actions para el admin | Mutaciones sin construir API propia; `revalidatePath` refresca. |
+| Rutas API para el dashboard | Carga incremental desde el cliente (scroll infinito, fetch on-demand). |
+| `pg` para `ESTATUS` | Robustez en standalone + acceso de una sola tabla. |
+| Match `split_part("ID",'@',1)` | El CRM guarda el número y `ESTATUS` el JID completo de WhatsApp. |
+| `output: standalone` | Imagen Docker mínima para EasyPanel. |
+| Tema oscuro con tokens CSS (HSL) | Consistencia y componentes shadcn copiados a `src/components/ui`. |
+| Canal normalizado en la ingesta | n8n puede enviar `page`/`instagram`; se guarda el canal de la instancia. |
+
+Ver decisiones no obvias y _gotchas_ en [`../.agent/context.md`](../.agent/context.md).

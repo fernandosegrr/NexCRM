@@ -198,7 +198,42 @@ vars del CRM. Primera vez: `npm run db:push && npm run db:seed`. Detalle en
 
 ---
 
-## 12. Pendiente / hardening (acciones de infraestructura)
+## 12. Mapa de archivos clave
+
+| Archivo | Qué hace |
+|---|---|
+| `src/auth.config.ts` | Config NextAuth **edge-safe** (callbacks jwt/session/authorized). Sin Prisma. |
+| `src/auth.ts` | NextAuth completo: provider `Credentials` (Prisma + bcrypt). |
+| `src/middleware.ts` | Aplica `authorized` a `/admin` y `/dashboard`. Excluye `/api`. |
+| `src/lib/prisma.ts` | Cliente Prisma (CRM), cacheado en `globalThis`. |
+| `src/lib/n8n.ts` | Pool `pg` + `getBotStatus`/`setBotStatus` (tabla `ESTATUS`). |
+| `src/lib/data.ts` | Todas las queries del CRM (server-only) + `serializeMessage`. |
+| `src/lib/validations.ts` | Schemas zod (login, business, user, ingesta, bot-status). |
+| `src/lib/n8n-snippets.ts` | Genera los nodos HTTP Request de n8n por canal. |
+| `src/lib/channels.ts` | Metadatos de canal (label, colores, ayuda del instancia_id). |
+| `src/app/actions/*` | Server Actions: `auth`, `businesses`, `users` (con `requireAdmin`). |
+| `src/app/api/messages/route.ts` | Ingesta pública (token opcional). |
+| `src/components/dashboard/*` | `conversations`, `conversation-view`, `bot-toggle`. |
+
+## 13. Tareas comunes (recetas)
+
+- **Campo nuevo en un modelo:** editar `prisma/schema.prisma` → `npm run db:generate && npm run db:push` → usar en `data.ts`/UI (y en `serializeMessage` si va por API).
+- **Canal nuevo:** `CHANNEL_META`/`CANAL_LIST` en `channels.ts` (+ `n8n-snippets.ts` si cambia el snippet).
+- **Endpoint nuevo bajo `/api`:** recuerda que está **fuera del middleware** → valida sesión/rol con `auth()` dentro del handler.
+- **Reset de la BD del CRM (destructivo):** `npm run db:reset && npm run db:seed`. NUNCA contra `N8N_DATABASE_URL`.
+- **Probar la ingesta sin n8n:** `curl -X POST .../api/messages` con un `instanciaId` registrado (ver `docs/api.md`).
+
+## 14. Debugging
+
+- **Login redirige a prod en local:** falta `.env.local` con `NEXTAUTH_URL=http://localhost:3000`.
+- **`Cannot find module '.prisma/client'`:** `npm run db:generate`.
+- **`404 Instancia no registrada` en la ingesta:** el `instanciaId` no existe como `BusinessInstance`.
+- **Toggle "No disponible":** sin conexión a `N8N_DATABASE_URL` (la BD de n8n).
+- **El build de Docker falla en Prisma:** asegúrate de usar el `Dockerfile` del repo (instala `openssl`).
+
+---
+
+## 15. Pendiente / hardening (acciones de infraestructura)
 
 - [ ] Rotar la contraseña de Postgres (se compartió en chat) y crear un rol de
       **mínimo privilegio** para n8n (solo CRUD sobre `ESTATUS`).

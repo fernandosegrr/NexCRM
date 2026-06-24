@@ -1,84 +1,137 @@
 # Modelo de datos
 
-## BD del CRM (Prisma — `prisma/schema.prisma`)
+Dos bases de datos: la del **CRM** (gestionada con Prisma) y la de **n8n** (solo la
+tabla `ESTATUS`, accedida con `pg`).
 
-### Enum `Role`
-`ADMIN` · `CLIENTE`
+---
 
-### `Business` → tabla `businesses`
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id` | uuid (PK) | |
-| `nombre` | string | |
-| `canales` | string[] | `['whatsapp','instagram','messenger']` |
-| `activo` | boolean | default `true` |
-| `creadoAt` | datetime | |
-| relaciones | | `instancias[]`, `usuarios[]`, `mensajes[]` |
+## BD del CRM — esquema Prisma (`prisma/schema.prisma`)
 
-### `BusinessInstance` → tabla `business_instances`
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id` | uuid (PK) | |
-| `businessId` | uuid (FK) | onDelete: Cascade |
-| `canal` | string | `whatsapp` \| `instagram` \| `messenger` |
-| `instanciaId` | string | nombre de instancia (WA) o `entry[0].id` (IG/MS) |
-| `activo` | boolean | |
-| **único** | | `(canal, instanciaId)` |
+```prisma
+enum Role {
+  ADMIN
+  CLIENTE
+}
 
-> Mapea un canal de un negocio con su identificador en n8n. Es lo que usa
-> `POST /api/messages` para resolver a qué negocio pertenece un mensaje.
+model Business {
+  id         String             @id @default(uuid())
+  nombre     String
+  canales    String[]           // ['whatsapp','instagram','messenger']
+  activo     Boolean            @default(true)
+  creadoAt   DateTime           @default(now())
+  instancias BusinessInstance[]
+  usuarios   User[]
+  mensajes   Message[]
+  @@map("businesses")
+}
 
-### `User` → tabla `users`
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id` | uuid (PK) | |
-| `email` | string | único |
-| `password` | string | hash **bcrypt** |
-| `nombre` | string | |
-| `rol` | Role | `ADMIN` o `CLIENTE` |
-| `activo` | boolean | si `false`, no puede iniciar sesión |
-| `businessId` | uuid? | null si ADMIN; FK onDelete: SetNull |
+model BusinessInstance {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  canal       String   // 'whatsapp' | 'instagram' | 'messenger'
+  instanciaId String   // instance_name (WA) o entry[0].id (FB/IG)
+  activo      Boolean  @default(true)
+  creadoAt    DateTime @default(now())
+  @@unique([canal, instanciaId])
+  @@index([businessId])
+  @@map("business_instances")
+}
 
-### `Message` → tabla `messages`
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id` | BigInt (PK, autoincrement) | se serializa a string en las respuestas |
-| `instanciaId` | string | |
-| `businessId` | uuid (FK) | |
-| `nombreNegocio` | string | **denormalizado** (histórico) |
-| `canal` | string | normalizado al ingerir |
-| `uidUsuario` | string | número WA o `sender.id` (IG/MS) |
-| `rol` | string | `user` \| `bot` |
-| `contenido` | string? | máx. 8000 chars en la ingesta |
-| `tipoMedia` | string | default `text` |
-| `enviadoAt` | datetime | default `now()` |
-| `latenciaMs` | int? | |
-| `metadata` | json? | |
-| **índices** | | `businessId`, `(instanciaId, uidUsuario)`, `enviadoAt desc` |
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  password   String    // bcrypt hash
+  nombre     String
+  rol        Role
+  activo     Boolean   @default(true)
+  businessId String?   // null si ADMIN
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  creadoAt   DateTime  @default(now())
+  @@index([businessId])
+  @@map("users")
+}
+
+model Message {
+  id            BigInt   @id @default(autoincrement())
+  instanciaId   String
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombreNegocio String   // denormalizado (histórico)
+  canal         String
+  uidUsuario    String
+  rol           String   // 'user' | 'bot'
+  contenido     String?
+  tipoMedia     String   @default("text")
+  enviadoAt     DateTime @default(now())
+  latenciaMs    Int?
+  metadata      Json?
+  @@index([businessId])
+  @@index([instanciaId, uidUsuario])
+  @@index([enviadoAt(sort: Desc)])
+  @@map("messages")
+}
+```
+
+### Relaciones y borrados
+- `Business 1—N BusinessInstance` (Cascade: borrar negocio borra sus instancias).
+- `Business 1—N User` (SetNull: borrar negocio deja al usuario sin negocio).
+- `Business 1—N Message` (Cascade).
+
+### Índices clave (rendimiento)
+- `messages(instanciaId, uidUsuario)` — agrupar conversaciones por contacto.
+- `messages(enviadoAt DESC)` — orden cronológico y "último mensaje".
+- `business_instances(canal, instanciaId)` **único** — resolver el negocio en la ingesta.
+
+### Por qué `nombreNegocio` está denormalizado
+Cada `Message` guarda el nombre del negocio al momento de registrarse. Así el
+historial no cambia si el negocio se renombra, y las consultas de la tabla de mensajes
+no necesitan un join.
+
+---
 
 ## BD de n8n — tabla `ESTATUS` (acceso `pg`, NO Prisma)
 
-Estructura real (identificadores **case-sensitive**):
+DDL real (identificadores **case-sensitive**, confirmado por introspección):
 
 ```sql
-"ESTATUS" (
-  id_registro  int     PRIMARY KEY,   -- serial (nextval)
-  "ID"         text,                  -- uid del usuario (JID WA o sender.id)
-  "Instancia"  text,                  -- nombre de la instancia
-  "Estatus"    text                   -- '/on' (activo) | '/off' (pausado)
-)
+CREATE TABLE "ESTATUS" (
+  id_registro  integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,  -- serial
+  "ID"         text,   -- uid del usuario: JID de WhatsApp o sender.id de Meta
+  "Instancia"  text,   -- nombre de la instancia
+  "Estatus"    text    -- '/on' (bot activo) | '/off' (bot pausado)
+);
 ```
 
-Reglas de lectura/escritura (`src/lib/n8n.ts`):
-- **Leer:** si no hay fila o `"Estatus" = '/on'` → bot **activo**; `'/off'` → **pausado**.
-- **Escribir:** upsert manual (busca por instancia+ID, actualiza por PK o inserta).
-- **Match de `"ID"`:** tolera el sufijo de WhatsApp comparando
-  `split_part("ID", '@', 1)` (porque el CRM guarda el número y n8n el JID completo).
+> El CRM **no** crea ni migra esta tabla: ya existe en n8n. Solo hace `SELECT` y upsert.
 
-> El CRM solo lee y hace upsert en esta tabla; jamás altera su esquema.
+### Lógica de lectura/escritura (`src/lib/n8n.ts`)
 
-## Estados y modalidades de dominio
+Match tolerante al sufijo de WhatsApp:
+```sql
+WHERE "Instancia" = $1
+  AND ( split_part("ID", '@', 1) = split_part($2, '@', 1) OR "ID" = $2 )
+```
 
-- **Rol de mensaje:** `user` (mensaje del usuario) · `bot` (respuesta del bot).
-- **Estado del bot:** `/on` (responde) · `/off` (pausado para ese contacto).
-- **Canales:** `whatsapp` · `instagram` · `messenger`.
+- **Leer (`getBotStatus`):** si no hay fila o `"Estatus" = '/on'` → `true`; `'/off'` → `false`.
+- **Escribir (`setBotStatus`):** busca por instancia+ID; si existe `UPDATE` por
+  `id_registro`, si no `INSERT` (sin `id_registro`, que es serial).
+
+Ejemplo real de fila:
+```
+id_registro=1  "ID"="5214623455661@s.whatsapp.net"  "Instancia"="vepiautomkt"  "Estatus"="/on"
+```
+El CRM guarda `uidUsuario="5214623455661"` (sin sufijo); por eso el match compara la
+parte previa a `@`.
+
+---
+
+## Diccionario de valores
+
+| Concepto | Valores |
+|---|---|
+| `Role` | `ADMIN`, `CLIENTE` |
+| `Message.rol` | `user`, `bot` |
+| `Estatus` | `/on`, `/off` |
+| `canal` | `whatsapp`, `instagram`, `messenger` |
+| `Message.tipoMedia` | `text` (default), o lo que envíe n8n (`image`, `audio`, ...) |
