@@ -1,0 +1,22 @@
+# NexAI CRM — se conecta a las BD de Postgres existentes (no incluye Postgres).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # URL pública del CRM (la usan los snippets de n8n)
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://crm.nexai.mx}
+    image: nexai-crm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      N8N_DATABASE_URL: ${N8N_DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://crm.nexai.mx}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://crm.nexai.mx}

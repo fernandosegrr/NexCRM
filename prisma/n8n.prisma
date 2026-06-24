@@ -1,0 +1,26 @@
+// ───────────────────────────────────────────────────────────
+// Base de datos EXISTENTE de n8n — solo la tabla ESTATUS.
+// El CRM lee/escribe esta tabla para pausar o activar el bot
+// por contacto. NO se ejecutan migraciones aquí (la tabla ya existe);
+// únicamente se genera el cliente:  prisma generate --schema=prisma/n8n.prisma
+// ───────────────────────────────────────────────────────────
+
+generator n8nClient {
+  provider = "prisma-client-js"
+  output   = "../src/generated/n8n-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("N8N_DATABASE_URL")
+}
+
+/// Tabla de control del bot por contacto.
+model Estatus {
+  id_registro Int    @id @default(autoincrement())
+  uid         String @map("ID") // número de WhatsApp o sender.id (FB/IG)
+  instancia   String @map("Instancia") // nombre de la instancia
+  estatus     String @map("Estatus") // '/on' o '/off'
+
+  @@map("ESTATUS")
+}

@@ -1,0 +1,80 @@
+// ───────────────────────────────────────────────────────────
+// NexAI CRM — Base de datos principal (Postgres)
+// ───────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CLIENTE
+}
+
+model Business {
+  id         String             @id @default(uuid())
+  nombre     String
+  canales    String[] // ['whatsapp','instagram','messenger']
+  activo     Boolean            @default(true)
+  creadoAt   DateTime           @default(now())
+  instancias BusinessInstance[]
+  usuarios   User[]
+  mensajes   Message[]
+
+  @@map("businesses")
+}
+
+model BusinessInstance {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  canal       String // 'whatsapp' | 'instagram' | 'messenger'
+  instanciaId String // instance_name (WA) o entry[0].id (FB/IG)
+  activo      Boolean  @default(true)
+  creadoAt    DateTime @default(now())
+
+  @@unique([canal, instanciaId])
+  @@index([businessId])
+  @@map("business_instances")
+}
+
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  password   String // bcrypt hash
+  nombre     String
+  rol        Role
+  activo     Boolean   @default(true)
+  businessId String? // null si ADMIN
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  creadoAt   DateTime  @default(now())
+
+  @@index([businessId])
+  @@map("users")
+}
+
+model Message {
+  id            BigInt   @id @default(autoincrement())
+  instanciaId   String
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombreNegocio String
+  canal         String
+  uidUsuario    String
+  rol           String // 'user' | 'bot'
+  contenido     String?
+  tipoMedia     String   @default("text")
+  enviadoAt     DateTime @default(now())
+  latenciaMs    Int?
+  metadata      Json?
+
+  @@index([businessId])
+  @@index([instanciaId, uidUsuario])
+  @@index([enviadoAt(sort: Desc)])
+  @@map("messages")
+}
