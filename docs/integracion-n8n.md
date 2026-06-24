@@ -205,7 +205,7 @@ evitarlo, define `MESSAGES_INGEST_TOKEN` en el CRM y manda el header en n8n.
 1. Pestaña **Headers** → activa **Send Headers**.
 2. Agrega un header:
    - **Name:** `Authorization`
-   - **Value:** `Bearer XUcyRmtH4WLXZGwCk377Vfg9BhQQS_EGtF0RucalsWw`
+   - **Value:** `Bearer <TU_MESSAGES_INGEST_TOKEN>`
 3. (Alternativa más segura) usa una **credencial Header Auth** de n8n en vez de pegar
    el token en cada nodo.
 
@@ -241,7 +241,7 @@ Si el token está activo y el header falta o no coincide, la API responde **401*
 ```bash
 curl -X POST https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer XUcyRmtH4WLXZGwCk377Vfg9BhQQS_EGtF0RucalsWw" \
+  -H "Authorization: Bearer <TU_MESSAGES_INGEST_TOKEN>" \
   -d '{
     "instanciaId": "TU_INSTANCIA_REGISTRADA",
     "canal": "whatsapp",

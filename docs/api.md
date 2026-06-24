@@ -46,7 +46,7 @@ Authorization: Bearer <MESSAGES_INGEST_TOKEN>   # solo si está activo
 ```bash
 curl -X POST https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer XUcyRmtH4WLXZGwCk377Vfg9BhQQS_EGtF0RucalsWw" \
+  -H "Authorization: Bearer <TU_MESSAGES_INGEST_TOKEN>" \
   -d '{
     "instanciaId": "mi-instancia-wa",
     "canal": "whatsapp",

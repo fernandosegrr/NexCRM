@@ -44,14 +44,14 @@ NEXT_PUBLIC_APP_URL=https://postgres-nexcrm.d6cr6o.easypanel.host
 En **Environment**:
 
 ```env
-DATABASE_URL=postgresql://postgres:Bfernando22@191.101.233.178:3112/crm
-N8N_DATABASE_URL=postgresql://postgres:Bfernando22@191.101.233.178:3112/postgres
-AUTH_SECRET=KluOaZq1uum337b1vbEnV8VP0iP2uVYHAIdU+c+1NcU=
-NEXTAUTH_SECRET=KluOaZq1uum337b1vbEnV8VP0iP2uVYHAIdU+c+1NcU=
+DATABASE_URL=postgresql://postgres:<TU_PASSWORD>@191.101.233.178:3112/crm
+N8N_DATABASE_URL=postgresql://postgres:<TU_PASSWORD>@191.101.233.178:3112/postgres
+AUTH_SECRET=<TU_AUTH_SECRET>
+NEXTAUTH_SECRET=<TU_AUTH_SECRET>
 AUTH_TRUST_HOST=true
 NEXTAUTH_URL=https://postgres-nexcrm.d6cr6o.easypanel.host
 NEXT_PUBLIC_APP_URL=https://postgres-nexcrm.d6cr6o.easypanel.host
-MESSAGES_INGEST_TOKEN=XUcyRmtH4WLXZGwCk377Vfg9BhQQS_EGtF0RucalsWw
+MESSAGES_INGEST_TOKEN=<TU_MESSAGES_INGEST_TOKEN>
 ```
 
 > 🔐 **Rota estos secretos** cuando puedas: `AUTH_SECRET` y la contraseña de Postgres
