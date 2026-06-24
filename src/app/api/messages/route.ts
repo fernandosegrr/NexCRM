@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         // Normaliza el canal usando el registrado en el CRM
         // (n8n puede enviar 'page'/'instagram' en body.object).
         canal: inst.canal,
-        uidUsuario: d.uidUsuario,
+        uidUsuario: d.uidUsuario.split("@")[0],
         rol: d.rol,
         contenido: d.contenido ?? null,
         tipoMedia: d.tipoMedia && d.tipoMedia.length ? d.tipoMedia : "text",
