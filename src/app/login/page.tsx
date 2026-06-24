@@ -22,7 +22,7 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Logo showSuffix={false} className="[&_img]:h-10" />
+          <Logo showSuffix={false} imageClassName="h-20" />
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">
             Bienvenido de vuelta
           </h1>

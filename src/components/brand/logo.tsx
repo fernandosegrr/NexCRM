@@ -6,9 +6,9 @@ export function LogoMark({ className }: { className?: string }) {
     <Image
       src="/favicon.png"
       alt="NexAI"
-      width={36}
-      height={36}
-      className={cn("h-9 w-auto object-contain", className)}
+      width={48}
+      height={48}
+      className={cn("h-10 w-auto object-contain", className)}
       priority
     />
   );
@@ -19,14 +19,16 @@ export function Logo({
   showText = true,
   showSuffix = true,
   textClassName,
+  imageClassName,
 }: {
   className?: string;
   showText?: boolean;
   showSuffix?: boolean;
   textClassName?: string;
+  imageClassName?: string;
 }) {
   if (!showText) {
-    return <LogoMark className={className} />;
+    return <LogoMark className={cn("h-10 w-auto", className)} />;
   }
 
   return (
@@ -34,9 +36,9 @@ export function Logo({
       <Image
         src="/logo-white.webp"
         alt="NexAI"
-        width={120}
-        height={36}
-        className="h-8 w-auto object-contain"
+        width={200}
+        height={50}
+        className={cn("h-14 w-auto object-contain", imageClassName)}
         priority
       />
       {showSuffix && (

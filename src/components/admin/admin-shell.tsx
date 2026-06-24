@@ -29,7 +29,7 @@ export function AdminShell({
       {/* Sidebar de escritorio */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-card/30 md:flex">
         <div className="flex h-16 items-center px-6">
-          <Logo />
+          <Logo imageClassName="h-9" />
         </div>
         <div className="mt-2 flex-1 overflow-y-auto pb-4">
           <SidebarNav />
@@ -44,7 +44,7 @@ export function AdminShell({
         <SheetContent side="left" className="w-72 p-0">
           <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
           <div className="flex h-16 items-center px-6">
-            <Logo />
+            <Logo imageClassName="h-9" />
           </div>
           <div className="mt-2">
             <SidebarNav onNavigate={() => setOpen(false)} />
