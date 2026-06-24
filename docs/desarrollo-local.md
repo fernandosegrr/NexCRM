@@ -22,7 +22,6 @@ dominio de producción al iniciar sesión:
 # .env.local
 NEXTAUTH_URL="http://localhost:3000"
 AUTH_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 ### 2. Base de datos

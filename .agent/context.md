@@ -130,10 +130,10 @@ docs/  .agent/  Dockerfile  docker-compose.yml
 4. **`id_registro` de `ESTATUS` es `serial`** (`nextval(...)`). El `INSERT` sin
    `id_registro` funciona; no hace falta calcularlo.
 
-5. **Variables `NEXT_PUBLIC_*` se incrustan en build.** `NEXT_PUBLIC_APP_URL` debe
-   pasarse como **build-arg** en Docker. En código se lee con fallback a
-   `NEXTAUTH_URL` (runtime), así que aunque no se pase el build-arg, los snippets
-   usan `NEXTAUTH_URL`.
+5. **La URL de los snippets de n8n se lee en RUNTIME** (no `NEXT_PUBLIC_*`). El
+   código usa `process.env.APP_URL || process.env.NEXTAUTH_URL` en un Server
+   Component, así que **no requiere build-args** en EasyPanel: basta con definir
+   las variables de entorno del contenedor.
 
 6. **Dev local vs prod.** `.env` apunta a prod; existe `.env.local` (gitignored)
    con `NEXTAUTH_URL=http://localhost:3000` para que el login funcione en local
@@ -168,7 +168,7 @@ AUTH_SECRET=...                 # = NEXTAUTH_SECRET
 NEXTAUTH_SECRET=...
 AUTH_TRUST_HOST=true
 NEXTAUTH_URL=https://postgres-nexcrm.d6cr6o.easypanel.host
-NEXT_PUBLIC_APP_URL=https://postgres-nexcrm.d6cr6o.easypanel.host
+APP_URL=https://postgres-nexcrm.d6cr6o.easypanel.host   # runtime; default = NEXTAUTH_URL
 # Opcionales
 MESSAGES_INGEST_TOKEN=...        # exige Bearer en POST /api/messages
 ADMIN_SEED_PASSWORD=...          # contraseña inicial del admin
@@ -192,8 +192,8 @@ docker compose up --build
 
 ## 11. Despliegue (EasyPanel)
 
-App por Dockerfile, build-arg `NEXT_PUBLIC_APP_URL`, puerto interno **3000**, env
-vars del CRM. Primera vez: `npm run db:push && npm run db:seed`. Detalle en
+App por Dockerfile (**sin build-args**), puerto interno **3000**, variables de
+entorno del CRM. Primera vez: `npm run db:push && npm run db:seed`. Detalle en
 [`../docs/despliegue-easypanel.md`](../docs/despliegue-easypanel.md).
 
 ---

@@ -4,9 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # URL pública del CRM (la usan los snippets de n8n)
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://postgres-nexcrm.d6cr6o.easypanel.host}
     image: nexai-crm
     restart: unless-stopped
     ports:
@@ -19,4 +16,5 @@ services:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-https://postgres-nexcrm.d6cr6o.easypanel.host}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://postgres-nexcrm.d6cr6o.easypanel.host}
+      APP_URL: ${APP_URL:-https://postgres-nexcrm.d6cr6o.easypanel.host}
+      MESSAGES_INGEST_TOKEN: ${MESSAGES_INGEST_TOKEN:-}

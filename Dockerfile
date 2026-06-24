@@ -19,9 +19,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# URL pública que usan los snippets de n8n (se incrusta en el build)
-ARG NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+# No se necesitan build-args: la URL de los snippets se lee en runtime
+# desde APP_URL / NEXTAUTH_URL (variables de entorno del contenedor).
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npx prisma generate

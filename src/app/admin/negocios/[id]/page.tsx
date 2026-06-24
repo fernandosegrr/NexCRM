@@ -85,8 +85,10 @@ export default async function BusinessDetailPage({
   const business = await getBusinessById(params.id);
   if (!business) notFound();
 
+  // URL pública para los snippets de n8n. Se lee en RUNTIME (no NEXT_PUBLIC_,
+  // así no requiere build-arg): usa APP_URL si existe, si no NEXTAUTH_URL.
   const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
     process.env.NEXTAUTH_URL ||
     "https://postgres-nexcrm.d6cr6o.easypanel.host";
 
