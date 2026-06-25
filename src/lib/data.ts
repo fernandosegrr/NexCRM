@@ -201,13 +201,17 @@ type ConversationRow = {
  */
 export async function getConversations(
   businessId: string,
-  opts?: { search?: string; take?: number; skip?: number },
+  opts?: { search?: string; take?: number; skip?: number; canal?: string },
 ): Promise<ConversationContact[]> {
   const take = Math.min(Math.max(opts?.take ?? 25, 1), 100);
   const skip = Math.max(opts?.skip ?? 0, 0);
   const search = opts?.search?.trim();
+  const canal = opts?.canal?.trim();
   const searchFilter = search
     ? Prisma.sql`AND m."uidUsuario" ILIKE ${"%" + search + "%"}`
+    : Prisma.empty;
+  const canalFilter = canal
+    ? Prisma.sql`AND m."canal" = ${canal}`
     : Prisma.empty;
 
   const rows = await prisma.$queryRaw<ConversationRow[]>(Prisma.sql`
@@ -224,13 +228,13 @@ export async function getConversations(
       SELECT DISTINCT ON (m."instanciaId", m."uidUsuario")
         m."instanciaId", m."uidUsuario", m."canal", m."contenido", m."rol", m."tipoMedia", m."enviadoAt"
       FROM "messages" m
-      WHERE m."businessId" = ${businessId} ${searchFilter}
+      WHERE m."businessId" = ${businessId} ${searchFilter} ${canalFilter}
       ORDER BY m."instanciaId", m."uidUsuario", m."enviadoAt" DESC
     ) t
     JOIN (
       SELECT m."instanciaId", m."uidUsuario", COUNT(*)::int AS cnt
       FROM "messages" m
-      WHERE m."businessId" = ${businessId} ${searchFilter}
+      WHERE m."businessId" = ${businessId} ${searchFilter} ${canalFilter}
       GROUP BY m."instanciaId", m."uidUsuario"
     ) c
       ON c."instanciaId" = t."instanciaId" AND c."uidUsuario" = t."uidUsuario"

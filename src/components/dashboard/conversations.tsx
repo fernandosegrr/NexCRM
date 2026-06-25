@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessagesSquare, RotateCw, Search, Users, WifiOff } from "lucide-react";
 
+const CANALES = [
+  { value: "", label: "Todos" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "instagram", label: "Instagram" },
+  { value: "messenger", label: "Messenger" },
+] as const;
+
 import type { ConversationContact } from "@/lib/data";
 import { avatarColor, initialOf, relativeTime, truncate } from "@/lib/format";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -87,6 +94,7 @@ export function Conversations() {
   const [hasMore, setHasMore] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [canal, setCanal] = useState("");
   const [selected, setSelected] = useState<ConversationContact | null>(null);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -101,9 +109,10 @@ export function Conversations() {
     let alive = true;
     setLoading(true);
     setError(false);
+    setContacts([]);
     const url = `/api/conversations?take=${PAGE}&skip=0${
       debounced ? `&search=${encodeURIComponent(debounced)}` : ""
-    }`;
+    }${canal ? `&canal=${encodeURIComponent(canal)}` : ""}`;
     fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error("bad status");
@@ -128,7 +137,7 @@ export function Conversations() {
     return () => {
       alive = false;
     };
-  }, [debounced, reloadKey]);
+  }, [debounced, canal, reloadKey]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -136,7 +145,7 @@ export function Conversations() {
     try {
       const url = `/api/conversations?take=${PAGE}&skip=${contacts.length}${
         debounced ? `&search=${encodeURIComponent(debounced)}` : ""
-      }`;
+      }${canal ? `&canal=${encodeURIComponent(canal)}` : ""}`;
       const d = await (await fetch(url)).json();
       const c: ConversationContact[] = d.contacts ?? [];
       setContacts((prev) => [...prev, ...c]);
@@ -146,7 +155,7 @@ export function Conversations() {
     } finally {
       setLoadingMore(false);
     }
-  }, [contacts.length, debounced, hasMore, loadingMore]);
+  }, [canal, contacts.length, debounced, hasMore, loadingMore]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -170,7 +179,7 @@ export function Conversations() {
           selected && "hidden md:flex",
         )}
       >
-        <div className="border-b border-border p-3">
+        <div className="border-b border-border p-3 space-y-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -179,6 +188,22 @@ export function Conversations() {
               placeholder="Buscar contacto…"
               className="pl-10"
             />
+          </div>
+          <div className="flex gap-1">
+            {CANALES.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setCanal(c.value)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  canal === c.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -219,11 +244,20 @@ export function Conversations() {
                               {relativeTime(c.lastAt)}
                             </span>
                           </div>
-                          <div className="mt-1 flex items-center gap-1.5">
-                            <ChannelBadge canal={c.canal} size="xs" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              {c.lastRol === "bot" ? "Bot: " : ""}
-                              {truncate(c.lastContent ?? "", 26) || "(sin texto)"}
+                          <div className="mt-1 flex items-center justify-between gap-1.5">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <ChannelBadge canal={c.canal} size="xs" />
+                              <span className="truncate text-xs text-muted-foreground">
+                                {c.lastRol === "bot"
+                                  ? "Bot: "
+                                  : c.lastRol === "human"
+                                    ? "Tú: "
+                                    : ""}
+                                {truncate(c.lastContent ?? "", 22) || "(sin texto)"}
+                              </span>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                              {c.total}
                             </span>
                           </div>
                         </div>
