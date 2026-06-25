@@ -46,18 +46,22 @@ export async function resolveContact(
         // API unreachable — save null values below
       }
     } else if (canal === "messenger" && token) {
-      // Messenger PSID profile requires pages_user_* permissions; skip if unavailable
+      // Use conversations API (pages_messaging) to get participant name.
+      // Direct PSID lookup requires pages_user_profile (advanced access).
       try {
         const res = await fetch(
-          `https://graph.facebook.com/${encodeURIComponent(uidUsuario)}?fields=name,profile_pic&access_token=${encodeURIComponent(token)}`,
+          `https://graph.facebook.com/v23.0/${encodeURIComponent(instanciaId)}/conversations` +
+          `?fields=participants&user_id=${encodeURIComponent(uidUsuario)}&access_token=${encodeURIComponent(token)}`,
         );
         if (res.ok) {
           const data = await res.json();
-          nombre = typeof data.name === "string" ? data.name : null;
-          fotoPerfil = typeof data.profile_pic === "string" ? data.profile_pic : null;
+          const participants: { name?: string; id: string }[] =
+            data?.data?.[0]?.participants?.data ?? [];
+          const user = participants.find((p) => p.id === uidUsuario);
+          nombre = user?.name ?? null;
         }
       } catch {
-        // API unreachable — save null values below
+        // API unreachable
       }
     } else if (canal === "whatsapp") {
       const apiUrl = process.env.EVOLUTION_API_URL;
