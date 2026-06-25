@@ -13,6 +13,7 @@ import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
 import { BotToggle } from "./bot-toggle";
 import { ReplyInput } from "./reply-input";
+import { ConversationSummaryButton } from "./summary-modal";
 
 function MessageMedia({
   tipoMedia,
@@ -217,6 +218,10 @@ export function ConversationView({
             <ChannelBadge canal={contact.canal} size="xs" />
           </div>
         </div>
+        <ConversationSummaryButton
+          instanciaId={contact.instanciaId}
+          uidUsuario={contact.uidUsuario}
+        />
         <BotToggle
           instanciaId={contact.instanciaId}
           uidUsuario={contact.uidUsuario}

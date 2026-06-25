@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
 import { ConversationView } from "./conversation-view";
+import { PeriodSummaryButton } from "./summary-modal";
 
 const PAGE = 25;
 
@@ -248,14 +249,17 @@ export function Conversations() {
         )}
       >
         <div className="border-b border-border p-3 space-y-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar contacto…"
-              className="pl-10"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar contacto…"
+                className="pl-10"
+              />
+            </div>
+            <PeriodSummaryButton />
           </div>
           <div className="flex gap-1">
             {CANALES.map((c) => (
