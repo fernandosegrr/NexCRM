@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Bot, MessageSquare, Users } from "lucide-react";
 
 import { getBusinessById } from "@/lib/data";
-import { buildN8nSnippets } from "@/lib/n8n-snippets";
+import { buildN8nSnippets, buildN8nPrompt } from "@/lib/n8n-snippets";
 import { isCanal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
 import { ChannelBadge } from "@/components/channel-badge";
@@ -107,6 +107,13 @@ export default async function BusinessDetailPage({
     ? buildN8nSnippets("instagram", appUrl)
     : null;
 
+  const llmPrompt = business.instancias.length > 0
+    ? buildN8nPrompt({
+        whatsapp: waSnippets ?? undefined,
+        igMsg: igMsgSnippets ?? undefined,
+      })
+    : null;
+
   return (
     <div className="space-y-8">
       <div>
@@ -158,6 +165,24 @@ export default async function BusinessDetailPage({
             para no romper el flujo del bot.
           </p>
         </div>
+
+        {llmPrompt && (
+          <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Prompt para agente IA</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Pégalo en un LLM junto con el JSON de tu flujo n8n. El agente sabrá
+                exactamente dónde conectar cada nodo según los canales de este negocio.
+              </p>
+            </div>
+            <CopyButton
+              value={llmPrompt}
+              label="Copiar prompt"
+              copiedLabel="Copiado"
+              className="shrink-0"
+            />
+          </div>
+        )}
 
         {business.instancias.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-card/30 px-4 py-8 text-center text-sm text-muted-foreground">
