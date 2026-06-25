@@ -84,6 +84,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const normalizedUid = d.uidUsuario.split("@")[0];
+
+    // Dedup: drop near-identical messages within 5s (Meta echoes, n8n webhook retries)
+    {
+      const since = new Date(Date.now() - 5000);
+      // Case 1: same text content → echo or retry
+      if (d.contenido) {
+        const dup = await prisma.message.findFirst({
+          where: { instanciaId: d.instanciaId, uidUsuario: normalizedUid, contenido: d.contenido, enviadoAt: { gte: since } },
+          select: { id: true },
+        });
+        if (dup) {
+          return NextResponse.json({ id: dup.id.toString(), deduplicated: true }, { status: 200 });
+        }
+      }
+      // Case 2: page echo with no content but a human message was just sent (media attachment echo)
+      if (d.rol === "page" && !d.contenido) {
+        const humanMsg = await prisma.message.findFirst({
+          where: { instanciaId: d.instanciaId, uidUsuario: normalizedUid, rol: "human", enviadoAt: { gte: since } },
+          select: { id: true },
+        });
+        if (humanMsg) {
+          return NextResponse.json({ id: humanMsg.id.toString(), deduplicated: true }, { status: 200 });
+        }
+      }
+    }
+
     const msg = await prisma.message.create({
       data: {
         instanciaId: d.instanciaId,
@@ -92,7 +119,7 @@ export async function POST(req: NextRequest) {
         // Normaliza el canal usando el registrado en el CRM
         // (n8n puede enviar 'page'/'instagram' en body.object).
         canal: inst.canal,
-        uidUsuario: d.uidUsuario.split("@")[0],
+        uidUsuario: normalizedUid,
         rol: d.rol,
         contenido: d.contenido ?? null,
         tipoMedia: d.tipoMedia && d.tipoMedia.length ? d.tipoMedia : "text",
@@ -108,7 +135,7 @@ export async function POST(req: NextRequest) {
     void auditLog({
       instanciaId: d.instanciaId,
       canal: inst.canal,
-      uidUsuario: d.uidUsuario.split("@")[0],
+      uidUsuario: normalizedUid,
       rol: d.rol,
       contenido: d.contenido,
       status: "ok",
@@ -118,7 +145,7 @@ export async function POST(req: NextRequest) {
     // Resolve contact name/photo on first user message (fire-and-forget)
     if (d.rol === "user") {
       void resolveContact(
-        d.uidUsuario.split("@")[0],
+        normalizedUid,
         d.instanciaId,
         inst.canal,
         inst.metaPageAccessToken,
