@@ -30,6 +30,8 @@ export const viewport: Viewport = {
   themeColor: "#0A0A0A",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,          // evita zoom automático al enfocar inputs en iOS
+  interactiveWidget: "resizes-content", // el teclado virtual hace shrink del viewport
 };
 
 export default function RootLayout({

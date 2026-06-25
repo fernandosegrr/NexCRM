@@ -186,7 +186,7 @@ export function ConversationView({
   }, [messages, error]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col">
       {/* Encabezado de la conversación */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
@@ -219,7 +219,7 @@ export function ConversationView({
       </div>
 
       {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-6">
         {error ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
             <WifiOff className="mb-3 size-8 opacity-60" />

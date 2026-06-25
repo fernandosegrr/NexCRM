@@ -324,7 +324,14 @@ export function Conversations() {
                                   : c.lastRol === "human"
                                     ? "Tú: "
                                     : ""}
-                                {truncate(c.lastContent ?? "", 22) || "(sin texto)"}
+                                {c.lastContent
+                                  ? truncate(c.lastContent, 22)
+                                  : c.lastTipoMedia === "image"    ? "📷 Imagen"
+                                  : c.lastTipoMedia === "audio"    ? "🎵 Audio"
+                                  : c.lastTipoMedia === "video"    ? "🎬 Video"
+                                  : c.lastTipoMedia === "document" ? "📄 Documento"
+                                  : c.lastTipoMedia === "sticker"  ? "🎭 Sticker"
+                                  : "(sin texto)"}
                               </span>
                             </div>
                             <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
@@ -353,7 +360,7 @@ export function Conversations() {
         className={cn(
           "min-w-0 flex-1 overflow-hidden",
           selected
-            ? "flex max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-background"
+            ? "flex flex-col max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-background"
             : "hidden md:flex",
         )}
       >

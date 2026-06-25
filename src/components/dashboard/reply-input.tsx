@@ -145,7 +145,7 @@ export function ReplyInput({
   const canSend = !sending && (!!text.trim() || !!media);
 
   return (
-    <div className="shrink-0 border-t border-border px-3 py-3 sm:px-4">
+    <div className="shrink-0 border-t border-border px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4">
       {/* Media preview strip */}
       {media && (
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
@@ -201,11 +201,7 @@ export function ReplyInput({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            media
-              ? "Agregar texto opcional…"
-              : "Responder como humano… (Enter para enviar)"
-          }
+          placeholder={media ? "Agregar texto opcional…" : "Responder como humano…"}
           className="min-h-[44px] max-h-32 flex-1 resize-none text-sm"
           rows={1}
           disabled={sending}
