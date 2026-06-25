@@ -75,14 +75,22 @@ export async function resolveContact(
           // Evolution API unreachable
         }
         try {
-          // Step 2: get profile picture
+          // Step 2: get profile picture (Evolution v2 uses POST for fetchProfile)
           const picRes = await fetch(
-            `${apiUrl.replace(/\/$/, "")}/chat/fetchProfile/${encodeURIComponent(instanciaId)}?number=${encodeURIComponent(waNumber)}`,
-            { headers: { apikey: apiKey } },
+            `${apiUrl.replace(/\/$/, "")}/chat/fetchProfile/${encodeURIComponent(instanciaId)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: apiKey },
+              body: JSON.stringify({ number: waNumber }),
+            },
           );
           if (picRes.ok) {
             const picData = await picRes.json();
-            fotoPerfil = picData?.profilePictureUrl ?? picData?.picture ?? null;
+            fotoPerfil =
+              picData?.profilePictureUrl ??
+              picData?.pictureUrl ??
+              picData?.picture ??
+              null;
           }
         } catch {
           // ignore
