@@ -133,6 +133,10 @@ export function MetaTokenForm({
   const state = expiryState(status.expiresAt);
   const showWarning = status.hasToken && (state === "expired" || state === "expiring");
 
+  const isIg = canal === "instagram";
+  const tokenLabel = isIg ? "Instagram Access Token" : "Page Access Token";
+  const tokenPlaceholder = isIg ? "IGAA…" : "EAAW…";
+
   return (
     <div className="space-y-3">
       {showWarning && (
@@ -160,7 +164,7 @@ export function MetaTokenForm({
         <div className="flex min-w-0 items-center gap-2">
           <KeyRound className="size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <p className="text-sm font-medium">Page Access Token</p>
+            <p className="text-sm font-medium">{tokenLabel}</p>
             <div className="mt-0.5">
               <StatusBadge
                 status={status}
@@ -188,13 +192,13 @@ export function MetaTokenForm({
       {open && (
         <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <p className="text-xs text-muted-foreground">
-            Pega el <strong>Page Access Token</strong> de tu página de{" "}
-            {canal === "instagram" ? "Instagram" : "Messenger"} obtenido desde
-            el panel de Meta Developers. El Page ID se detecta automáticamente.
+            Pega el <strong>{tokenLabel}</strong> de tu cuenta de{" "}
+            {isIg ? "Instagram" : "Messenger"} obtenido desde el panel de Meta
+            Developers. El ID se detecta automáticamente al verificar.
           </p>
           <div className="space-y-1.5">
             <Label htmlFor={`token-${instanceId}`} className="text-xs">
-              Page Access Token
+              {tokenLabel}
             </Label>
             <div className="relative">
               <Input
@@ -202,7 +206,7 @@ export function MetaTokenForm({
                 type={showToken ? "text" : "password"}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="EAAWs…  /  IGAA5…"
+                placeholder={tokenPlaceholder}
                 required
                 className="h-8 pr-9 font-mono text-xs"
                 disabled={saving}

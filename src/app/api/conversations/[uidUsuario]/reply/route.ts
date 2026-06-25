@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { META_VERSION, metaHost } from "@/lib/meta";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ async function sendWhatsAppMedia(
         headers: { "Content-Type": "application/json", apikey: apiKey },
         body: JSON.stringify({
           number: numero,
-          mediatype: tipoMedia,
+          mediatype: tipoMedia, // image | video | document (NO audio)
           media: mediaUrl,
           caption: caption ?? "",
           ...(tipoMedia === "document"
@@ -73,9 +74,36 @@ async function sendWhatsAppMedia(
   }
 }
 
+// Evolution v2: el audio NO va por sendMedia, tiene su propio endpoint (PTT).
+async function sendWhatsAppAudio(
+  instanciaId: string,
+  numero: string,
+  audioUrl: string,
+): Promise<boolean> {
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  if (!apiUrl || !apiKey) return false;
+  try {
+    const res = await fetch(
+      `${apiUrl.replace(/\/$/, "")}/message/sendWhatsAppAudio/${instanciaId}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: apiKey },
+        body: JSON.stringify({ number: numero, audio: audioUrl }),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── Meta Graph API (Instagram DM + Messenger) ───────────────────────────────
+// El host depende del canal: messenger → graph.facebook.com,
+// instagram → graph.instagram.com (ver src/lib/meta.ts).
 
 async function sendMetaText(
+  canal: string,
   pageId: string,
   token: string,
   recipientId: string,
@@ -83,7 +111,7 @@ async function sendMetaText(
 ): Promise<boolean> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${pageId}/messages`,
+      `https://${metaHost(canal)}/${META_VERSION}/${pageId}/messages`,
       {
         method: "POST",
         headers: {
@@ -92,6 +120,7 @@ async function sendMetaText(
         },
         body: JSON.stringify({
           recipient: { id: recipientId },
+          messaging_type: "RESPONSE",
           message: { text: texto },
         }),
       },
@@ -103,17 +132,18 @@ async function sendMetaText(
 }
 
 async function sendMetaMedia(
+  canal: string,
   pageId: string,
   token: string,
   recipientId: string,
   mediaUrl: string,
   tipoMedia: string,
 ): Promise<boolean> {
-  // Meta uses "file" for documents, rest maps 1:1
+  // Meta usa "file" para documentos, el resto mapea 1:1
   const metaType = tipoMedia === "document" ? "file" : tipoMedia;
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${pageId}/messages`,
+      `https://${metaHost(canal)}/${META_VERSION}/${pageId}/messages`,
       {
         method: "POST",
         headers: {
@@ -122,6 +152,7 @@ async function sendMetaMedia(
         },
         body: JSON.stringify({
           recipient: { id: recipientId },
+          messaging_type: "RESPONSE",
           message: {
             attachment: {
               type: metaType,
@@ -191,17 +222,21 @@ export async function POST(
   const isMedia = !!mediaUrl && tipoMedia !== "text";
 
   if (inst.canal === "whatsapp") {
-    sent = isMedia
-      ? await sendWhatsAppMedia(instanciaId, uidUsuario, mediaUrl!, tipoMedia, contenido)
-      : await sendWhatsAppText(instanciaId, uidUsuario, contenido!);
+    if (!isMedia) {
+      sent = await sendWhatsAppText(instanciaId, uidUsuario, contenido!);
+    } else if (tipoMedia === "audio") {
+      sent = await sendWhatsAppAudio(instanciaId, uidUsuario, mediaUrl!);
+    } else {
+      sent = await sendWhatsAppMedia(instanciaId, uidUsuario, mediaUrl!, tipoMedia, contenido);
+    }
   } else if (
     (inst.canal === "instagram" || inst.canal === "messenger") &&
     inst.metaPageId &&
     inst.metaPageAccessToken
   ) {
     sent = isMedia
-      ? await sendMetaMedia(inst.metaPageId, inst.metaPageAccessToken, uidUsuario, mediaUrl!, tipoMedia)
-      : await sendMetaText(inst.metaPageId, inst.metaPageAccessToken, uidUsuario, contenido!);
+      ? await sendMetaMedia(inst.canal, inst.metaPageId, inst.metaPageAccessToken, uidUsuario, mediaUrl!, tipoMedia)
+      : await sendMetaText(inst.canal, inst.metaPageId, inst.metaPageAccessToken, uidUsuario, contenido!);
   }
 
   const msg = await prisma.message.create({

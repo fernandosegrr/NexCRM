@@ -111,6 +111,13 @@ export function ReplyInput({
         mediaUrl: data.mediaUrl ?? mediaUrl,
         enviadoAt: data.enviadoAt,
       });
+      if (data.sent === false) {
+        toast.warning(
+          canal === "whatsapp"
+            ? "Guardado, pero no se pudo enviar por WhatsApp. Revisa la conexión de Evolution API."
+            : "Guardado, pero no se envió: configura el token de Meta para esta instancia.",
+        );
+      }
       setText("");
       removeMedia();
       textRef.current?.focus();

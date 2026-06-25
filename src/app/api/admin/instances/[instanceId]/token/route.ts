@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveMetaId } from "@/lib/meta";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,26 +11,16 @@ const tokenSchema = z.object({
   metaPageAccessToken: z.string().min(10),
 });
 
-async function resolveMetaPageId(token: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/me?access_token=${encodeURIComponent(token)}&fields=id`,
-    );
-    const data = await res.json();
-    if (data.error || !data.id) return null;
-    return data.id as string;
-  } catch {
-    return null;
-  }
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { instanceId: string } },
 ) {
   const session = await auth();
-  if (!session?.user || session.user.rol !== "ADMIN") {
+  if (!session?.user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  if (session.user.rol !== "ADMIN") {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
   let body: unknown;
@@ -58,7 +49,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Esta instancia no es de tipo Meta" }, { status: 400 });
   }
 
-  const pageId = await resolveMetaPageId(metaPageAccessToken);
+  const pageId = await resolveMetaId(instance.canal, metaPageAccessToken);
   if (!pageId) {
     return NextResponse.json(
       { error: "Token inválido o expirado — Meta no lo reconoce." },

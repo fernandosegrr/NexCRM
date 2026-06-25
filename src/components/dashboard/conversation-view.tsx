@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, MessageSquare, RotateCw, WifiOff } from "lucide-react";
+import { ArrowLeft, FileText, MessageSquare, RotateCw, WifiOff } from "lucide-react";
 
 import type { ConversationContact, MessageDTO } from "@/lib/data";
 import { avatarColor, dayLabel, initialOf, timeOnly } from "@/lib/format";
@@ -13,6 +13,58 @@ import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
 import { BotToggle } from "./bot-toggle";
 import { ReplyInput } from "./reply-input";
+
+function MessageMedia({
+  tipoMedia,
+  mediaUrl,
+  dark,
+}: {
+  tipoMedia: string;
+  mediaUrl: string | null;
+  dark: boolean;
+}) {
+  if (!mediaUrl || tipoMedia === "text") return null;
+
+  if (tipoMedia === "image") {
+    return (
+      <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={mediaUrl}
+          alt="imagen"
+          className="mb-1 max-h-64 w-full rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+  if (tipoMedia === "video") {
+    return (
+      <video
+        src={mediaUrl}
+        controls
+        className="mb-1 max-h-64 w-full rounded-lg"
+      />
+    );
+  }
+  if (tipoMedia === "audio") {
+    return <audio src={mediaUrl} controls className="mb-1 w-full" />;
+  }
+  // document u otro
+  return (
+    <a
+      href={mediaUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs underline-offset-2 hover:underline",
+        dark ? "bg-white/15" : "bg-background/60",
+      )}
+    >
+      <FileText className="size-4 shrink-0" />
+      <span className="truncate">{mediaUrl.split("/").pop() ?? "archivo"}</span>
+    </a>
+  );
+}
 
 function MessagesSkeleton() {
   return (
@@ -63,6 +115,7 @@ export function ConversationView({
       rol: "human",
       contenido: msg.contenido,
       tipoMedia: msg.tipoMedia,
+      mediaUrl: msg.mediaUrl,
       enviadoAt: msg.enviadoAt,
       latenciaMs: null,
     };
@@ -192,13 +245,20 @@ export function ConversationView({
                             : "rounded-bl-md bg-secondary text-secondary-foreground",
                       )}
                     >
-                      <p className="whitespace-pre-wrap break-words">
-                        {m.contenido && m.contenido.trim()
-                          ? m.contenido
-                          : m.tipoMedia !== "text"
-                            ? `[${m.tipoMedia}]`
-                            : ""}
-                      </p>
+                      <MessageMedia
+                        tipoMedia={m.tipoMedia}
+                        mediaUrl={m.mediaUrl}
+                        dark={isBot || isHuman}
+                      />
+                      {m.contenido && m.contenido.trim() ? (
+                        <p className="whitespace-pre-wrap break-words">
+                          {m.contenido}
+                        </p>
+                      ) : !m.mediaUrl && m.tipoMedia !== "text" ? (
+                        <p className="whitespace-pre-wrap break-words italic opacity-80">
+                          [{m.tipoMedia}]
+                        </p>
+                      ) : null}
                       <p
                         className={cn(
                           "mt-1 text-right text-[10px]",

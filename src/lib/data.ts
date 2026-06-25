@@ -12,9 +12,19 @@ export type MessageDTO = {
   rol: string;
   contenido: string | null;
   tipoMedia: string;
+  mediaUrl: string | null;
   enviadoAt: string;
   latenciaMs: number | null;
 };
+
+/** Extrae la URL del medio guardada en metadata.url (si existe). */
+function extractMediaUrl(metadata: unknown): string | null {
+  if (metadata && typeof metadata === "object" && "url" in metadata) {
+    const u = (metadata as { url?: unknown }).url;
+    return typeof u === "string" ? u : null;
+  }
+  return null;
+}
 
 function serializeMessage(m: {
   id: bigint;
@@ -28,6 +38,7 @@ function serializeMessage(m: {
   tipoMedia: string;
   enviadoAt: Date;
   latenciaMs: number | null;
+  metadata?: unknown;
 }): MessageDTO {
   return {
     id: m.id.toString(),
@@ -39,6 +50,7 @@ function serializeMessage(m: {
     rol: m.rol,
     contenido: m.contenido,
     tipoMedia: m.tipoMedia,
+    mediaUrl: extractMediaUrl(m.metadata),
     enviadoAt: m.enviadoAt.toISOString(),
     latenciaMs: m.latenciaMs,
   };
