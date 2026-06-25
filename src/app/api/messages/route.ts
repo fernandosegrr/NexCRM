@@ -86,41 +86,20 @@ export async function POST(req: NextRequest) {
 
     const normalizedUid = d.uidUsuario.split("@")[0];
 
-    // Dedup by source:
-    //   - rol:"page" = Meta echo of a message already saved by the reply route as "human"/"bot"
-    //     With content  → no time window: if same text already exists as human/bot, it's always an echo
-    //     Without content → media echo: check for recent human within 10s
-    //   - Other roles → exact duplicate within 5s (n8n webhook retry)
-    if (d.rol === "page") {
-      const echoSource = await prisma.message.findFirst({
-        where: {
-          instanciaId: d.instanciaId,
-          uidUsuario: normalizedUid,
-          rol: { in: ["human", "bot"] },
-          ...(d.contenido
-            ? { contenido: d.contenido }
-            : { enviadoAt: { gte: new Date(Date.now() - 10000) } }),
-        },
-        select: { id: true },
-      });
-      if (echoSource) {
-        return NextResponse.json({ id: echoSource.id.toString(), deduplicated: true }, { status: 200 });
-      }
-    } else {
+    // Dedup: drop identical content within 5s regardless of role (Meta echoes, webhook retries)
+    if (d.contenido) {
       const since = new Date(Date.now() - 5000);
-      const retry = await prisma.message.findFirst({
+      const dup = await prisma.message.findFirst({
         where: {
           instanciaId: d.instanciaId,
           uidUsuario: normalizedUid,
-          rol: d.rol,
-          contenido: d.contenido ?? null,
-          tipoMedia: d.tipoMedia ?? "text",
+          contenido: d.contenido,
           enviadoAt: { gte: since },
         },
         select: { id: true },
       });
-      if (retry) {
-        return NextResponse.json({ id: retry.id.toString(), deduplicated: true }, { status: 200 });
+      if (dup) {
+        return NextResponse.json({ id: dup.id.toString(), deduplicated: true }, { status: 200 });
       }
     }
 
