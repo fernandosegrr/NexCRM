@@ -103,21 +103,22 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
     ],
     0,
   );
+  // is_echo=true: cualquier mensaje saliente de la página (bot o humano desde bandeja Meta).
+  // sender.id es la página; el cliente es recipient.id.
   const humanReply = httpNode(
-    "CRM · Respuesta humana",
+    "CRM · Echo de página (is_echo=true)",
     url,
     [
       ["instanciaId", "={{ $('Webhook').item.json.body.entry[0].id }}"],
       ["canal", "={{ $('Webhook').item.json.body.object }}"],
-      // En un echo el sender es la página; el cliente es el recipient
       ["uidUsuario", "={{ $('Webhook').item.json.body.entry[0].messaging[0].recipient.id }}"],
-      ["rol", "human"],
+      ["rol", "page"],
       ["contenido", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? '' }}"],
     ],
     320,
   );
   const fin = httpNode(
-    "CRM · Respuesta del bot (fin)",
+    "CRM · Respuesta del bot (fin) [DEPRECADO para FB/IG]",
     url,
     [
       ["instanciaId", "={{ $('Webhook').item.json.body.entry[0].id }}"],
@@ -201,23 +202,26 @@ export function buildN8nPrompt(channels: {
           {
             label: '`CRM · Mensaje del usuario (inicio)` — rol: user',
             placement:
-              "En la ruta principal de mensajes entrantes, JUSTO ANTES del nodo de IA (Code o AI Agent). " +
+              "Después del filtro is_echo=false (rama donde llegan mensajes del usuario), " +
+              "justo antes del nodo de IA (Code o AI Agent). " +
               "Si el flujo maneja Instagram y Messenger en el mismo webhook, agrega el nodo una sola vez.",
             json: s.inicio,
           },
           {
-            label: '`CRM · Respuesta humana` — rol: human',
+            label: '`CRM · Echo de página (is_echo=true)` — rol: page',
             placement:
               "En la salida TRUE del nodo If que detecta is_echo=true. " +
+              "Registra CUALQUIER mensaje saliente de la página (bot automático o humano desde la bandeja Meta). " +
               "DEAD END: sin conexión de salida. " +
               "IMPORTANTE: uidUsuario = recipient.id (el cliente), NO sender.id — " +
               "en un echo, sender.id es el ID de la propia página Meta.",
             json: s.humanReply,
           },
           {
-            label: '`CRM · Respuesta del bot (fin)` — rol: bot',
+            label: '`CRM · Respuesta del bot (fin)` — rol: bot [DEPRECADO para FB/IG]',
             placement:
-              "Inmediatamente DESPUÉS del nodo de IA: [nodo de IA] → [este nodo].",
+              "DEPRECADO para Instagram/Messenger — el nodo Echo (is_echo=true) ya registra todas las respuestas salientes. " +
+              "Este nodo solo aplica para WhatsApp. No lo uses en flujos de Meta.",
             json: s.fin,
           },
         ],

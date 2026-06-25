@@ -43,11 +43,15 @@ export async function getBotStatus(
   instanciaId: string,
   uidUsuario: string,
 ): Promise<boolean> {
+  console.log("[getBotStatus] query", { instanciaId, uidUsuario });
   const { rows } = await n8nPool.query<{ Estatus: string }>(
     `SELECT "Estatus" FROM "ESTATUS" WHERE ${MATCH} ORDER BY id_registro DESC LIMIT 1`,
     [instanciaId, uidUsuario],
   );
-  if (rows.length === 0) return true;
+  if (rows.length === 0) {
+    console.warn("[getBotStatus] no row found for", { instanciaId, uidUsuario });
+    return true;
+  }
   return rows[0].Estatus !== OFF;
 }
 

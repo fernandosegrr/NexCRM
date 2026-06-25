@@ -198,6 +198,9 @@ export type ConversationContact = {
   lastTipoMedia: string;
   lastAt: string;
   total: number;
+  nombre: string | null;
+  username: string | null;
+  fotoPerfil: string | null;
 };
 
 type ConversationRow = {
@@ -209,6 +212,9 @@ type ConversationRow = {
   lastTipoMedia: string;
   lastAt: Date;
   total: number;
+  nombre: string | null;
+  username: string | null;
+  fotoPerfil: string | null;
 };
 
 /**
@@ -239,7 +245,10 @@ export async function getConversations(
       t."rol"        AS "lastRol",
       t."tipoMedia"  AS "lastTipoMedia",
       t."enviadoAt"  AS "lastAt",
-      c.cnt          AS "total"
+      c.cnt          AS "total",
+      ct."nombre"    AS "nombre",
+      ct."username"  AS "username",
+      ct."fotoPerfil" AS "fotoPerfil"
     FROM (
       SELECT DISTINCT ON (m."instanciaId", m."uidUsuario")
         m."instanciaId", m."uidUsuario", m."canal", m."contenido", m."rol", m."tipoMedia", m."enviadoAt"
@@ -254,6 +263,8 @@ export async function getConversations(
       GROUP BY m."instanciaId", m."uidUsuario"
     ) c
       ON c."instanciaId" = t."instanciaId" AND c."uidUsuario" = t."uidUsuario"
+    LEFT JOIN "contacts" ct
+      ON ct."instanciaId" = t."instanciaId" AND ct."uidUsuario" = t."uidUsuario"
     ORDER BY t."enviadoAt" DESC
     LIMIT ${take} OFFSET ${skip}
   `);
@@ -267,6 +278,9 @@ export async function getConversations(
     lastTipoMedia: r.lastTipoMedia,
     lastAt: r.lastAt.toISOString(),
     total: Number(r.total),
+    nombre: r.nombre ?? null,
+    username: r.username ?? null,
+    fotoPerfil: r.fotoPerfil ?? null,
   }));
 }
 

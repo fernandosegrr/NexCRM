@@ -125,8 +125,13 @@ async function sendMetaText(
         }),
       },
     );
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[sendMetaText] Meta API error", { canal, status: res.status, pageId, recipientId, body: errBody });
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error("[sendMetaText] fetch error", { canal, pageId, recipientId, err });
     return false;
   }
 }
@@ -162,8 +167,13 @@ async function sendMetaMedia(
         }),
       },
     );
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[sendMetaMedia] Meta API error", { canal, status: res.status, pageId, recipientId, body: errBody });
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error("[sendMetaMedia] fetch error", { canal, pageId, recipientId, err });
     return false;
   }
 }
@@ -219,6 +229,7 @@ export async function POST(
   }
 
   let sent = false;
+  let noToken = false;
   const isMedia = !!mediaUrl && tipoMedia !== "text";
 
   if (inst.canal === "whatsapp") {
@@ -229,14 +240,15 @@ export async function POST(
     } else {
       sent = await sendWhatsAppMedia(instanciaId, uidUsuario, mediaUrl!, tipoMedia, contenido);
     }
-  } else if (
-    (inst.canal === "instagram" || inst.canal === "messenger") &&
-    inst.metaPageId &&
-    inst.metaPageAccessToken
-  ) {
-    sent = isMedia
-      ? await sendMetaMedia(inst.canal, inst.metaPageId, inst.metaPageAccessToken, uidUsuario, mediaUrl!, tipoMedia)
-      : await sendMetaText(inst.canal, inst.metaPageId, inst.metaPageAccessToken, uidUsuario, contenido!);
+  } else if (inst.canal === "instagram" || inst.canal === "messenger") {
+    if (!inst.metaPageAccessToken) {
+      noToken = true;
+    } else {
+      // instanciaId = entry[0].id del webhook Meta = Page ID (Messenger) o IG User ID (Instagram)
+      sent = isMedia
+        ? await sendMetaMedia(inst.canal, inst.instanciaId, inst.metaPageAccessToken, uidUsuario, mediaUrl!, tipoMedia)
+        : await sendMetaText(inst.canal, inst.instanciaId, inst.metaPageAccessToken, uidUsuario, contenido!);
+    }
   }
 
   const msg = await prisma.message.create({
@@ -261,6 +273,7 @@ export async function POST(
       tipoMedia: isMedia ? tipoMedia : "text",
       mediaUrl: mediaUrl ?? null,
       sent,
+      noToken,
     },
     { status: 201 },
   );

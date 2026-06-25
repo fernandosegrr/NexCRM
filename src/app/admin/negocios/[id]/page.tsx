@@ -7,6 +7,7 @@ import { getBusinessById } from "@/lib/data";
 import { buildN8nSnippets, buildN8nPrompt } from "@/lib/n8n-snippets";
 import { isCanal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadButton } from "@/components/download-button";
@@ -53,20 +54,31 @@ function SnippetBlock({
   rol,
   code,
   filename,
+  deprecated,
 }: {
   title: string;
-  rol: "user" | "bot" | "human";
+  rol: "user" | "bot" | "human" | "page";
   code: string;
   filename: string;
+  deprecated?: boolean;
 }) {
   const badgeVariant =
-    rol === "bot" ? "default" : rol === "human" ? "success" : "muted";
+    rol === "bot"
+      ? "default"
+      : rol === "human"
+        ? "success"
+        : rol === "page"
+          ? "secondary"
+          : "muted";
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-background/50">
+    <div className={cn("overflow-hidden rounded-lg border border-border bg-background/50", deprecated && "opacity-60")}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <Badge variant={badgeVariant}>{rol}</Badge>
           <span className="text-sm font-medium">{title}</span>
+          {deprecated && (
+            <Badge variant="muted" className="text-[10px]">Deprecado</Badge>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <CopyButton value={code} />
@@ -281,22 +293,23 @@ export default async function BusinessDetailPage({
                 </div>
                 <div className="grid gap-4 lg:grid-cols-3">
                   <SnippetBlock
-                    title="Inicio (usuario)"
+                    title="Inicio (usuario — is_echo=false)"
                     rol="user"
                     code={igMsgSnippets.inicio}
                     filename="crm-ig-messenger-inicio.json"
                   />
                   <SnippetBlock
-                    title="Respuesta humana (echo=true)"
-                    rol="human"
+                    title="Echo de página (is_echo=true)"
+                    rol="page"
                     code={igMsgSnippets.humanReply}
-                    filename="crm-ig-messenger-human-reply.json"
+                    filename="crm-ig-messenger-echo.json"
                   />
                   <SnippetBlock
                     title="Respuesta del bot (fin)"
                     rol="bot"
                     code={igMsgSnippets.fin}
                     filename="crm-ig-messenger-fin.json"
+                    deprecated
                   />
                 </div>
               </div>

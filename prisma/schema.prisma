@@ -72,7 +72,7 @@ model Message {
   nombreNegocio String
   canal         String
   uidUsuario    String
-  rol           String // 'user' | 'bot'
+  rol           String // 'user' | 'bot' | 'human' | 'page'
   contenido     String?
   tipoMedia     String   @default("text")
   enviadoAt     DateTime @default(now())
@@ -83,4 +83,36 @@ model Message {
   @@index([instanciaId, uidUsuario])
   @@index([enviadoAt(sort: Desc)])
   @@map("messages")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime @default(now())
+  instanciaId String
+  canal       String?
+  uidUsuario  String?
+  rol         String?
+  contenido   String?
+  status      String
+  errorDetail String?
+  messageId   String?
+
+  @@index([timestamp(sort: Desc)])
+  @@index([status])
+  @@index([instanciaId])
+  @@map("audit_logs")
+}
+
+model Contact {
+  id          String   @id @default(uuid())
+  uidUsuario  String
+  instanciaId String
+  canal       String
+  nombre      String?
+  username    String?
+  fotoPerfil  String?
+  resolvedAt  DateTime @default(now())
+
+  @@unique([instanciaId, uidUsuario])
+  @@map("contacts")
 }

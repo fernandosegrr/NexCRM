@@ -1,0 +1,98 @@
+import { prisma } from "@/lib/prisma";
+
+/**
+ * Resolves a contact's name and profile photo from Meta Graph API or
+ * Evolution API (WhatsApp) and upserts it into the contacts table.
+ * Silently ignores all errors — never blocks message ingestion.
+ */
+export async function resolveContact(
+  uidUsuario: string,
+  instanciaId: string,
+  canal: string,
+  token?: string | null,
+): Promise<void> {
+  try {
+    const existing = await prisma.contact.findUnique({
+      where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+    });
+    if (existing) return;
+
+    let nombre: string | null = null;
+    let username: string | null = null;
+    let fotoPerfil: string | null = null;
+
+    if (canal === "instagram" && token) {
+      // Instagram tokens (IGAA…) only work on graph.instagram.com
+      try {
+        const res = await fetch(
+          `https://graph.instagram.com/${encodeURIComponent(uidUsuario)}?fields=name,username&access_token=${encodeURIComponent(token)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          nombre = typeof data.name === "string" ? data.name : null;
+          username = typeof data.username === "string" ? data.username : null;
+          // graph.instagram.com doesn't expose profile_pic for DM users
+        }
+      } catch {
+        // API unreachable — save null values below
+      }
+    } else if (canal === "messenger" && token) {
+      // Messenger PSID profile requires pages_user_* permissions; skip if unavailable
+      try {
+        const res = await fetch(
+          `https://graph.facebook.com/${encodeURIComponent(uidUsuario)}?fields=name,profile_pic&access_token=${encodeURIComponent(token)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          nombre = typeof data.name === "string" ? data.name : null;
+          fotoPerfil = typeof data.profile_pic === "string" ? data.profile_pic : null;
+        }
+      } catch {
+        // API unreachable — save null values below
+      }
+    } else if (canal === "whatsapp") {
+      const apiUrl = process.env.EVOLUTION_API_URL;
+      const apiKey = process.env.EVOLUTION_API_KEY;
+      if (apiUrl && apiKey) {
+        const waNumber = `${uidUsuario}@s.whatsapp.net`;
+        try {
+          // Step 1: get pushName
+          const numbersRes = await fetch(
+            `${apiUrl.replace(/\/$/, "")}/chat/whatsappNumbers/${encodeURIComponent(instanciaId)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: apiKey },
+              body: JSON.stringify({ numbers: [waNumber] }),
+            },
+          );
+          if (numbersRes.ok) {
+            const numbersData = await numbersRes.json();
+            const entry = Array.isArray(numbersData) ? numbersData[0] : null;
+            nombre = entry?.name ?? entry?.pushName ?? null;
+          }
+        } catch {
+          // Evolution API unreachable
+        }
+        try {
+          // Step 2: get profile picture
+          const picRes = await fetch(
+            `${apiUrl.replace(/\/$/, "")}/chat/fetchProfile/${encodeURIComponent(instanciaId)}?number=${encodeURIComponent(waNumber)}`,
+            { headers: { apikey: apiKey } },
+          );
+          if (picRes.ok) {
+            const picData = await picRes.json();
+            fotoPerfil = picData?.profilePictureUrl ?? picData?.picture ?? null;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    await prisma.contact.create({
+      data: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil },
+    });
+  } catch {
+    // Never throw — contact resolution is best-effort
+  }
+}

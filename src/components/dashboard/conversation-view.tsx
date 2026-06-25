@@ -6,7 +6,7 @@ import { ArrowLeft, FileText, MessageSquare, RotateCw, WifiOff } from "lucide-re
 
 import type { ConversationContact, MessageDTO } from "@/lib/data";
 import { avatarColor, dayLabel, initialOf, timeOnly } from "@/lib/format";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
@@ -122,11 +122,16 @@ export function ConversationView({
     setMessages((prev) => (prev ? [...prev, newMsg] : [newMsg]));
   }
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     let alive = true;
     setMessages(null);
     setError(false);
+    // Close any previous SSE connection for this contact
+    sseRef.current?.close();
+    sseRef.current = null;
+
     const url = `/api/conversations/${encodeURIComponent(
       contact.uidUsuario,
     )}?instanciaId=${encodeURIComponent(contact.instanciaId)}`;
@@ -136,7 +141,28 @@ export function ConversationView({
         return r.json();
       })
       .then((d) => {
-        if (alive) setMessages(d.messages ?? []);
+        if (!alive) return;
+        const loaded: MessageDTO[] = d.messages ?? [];
+        setMessages(loaded);
+
+        // Open SSE after initial load to stream new messages
+        const since = loaded.at(-1)?.enviadoAt ?? new Date().toISOString();
+        const sseUrl =
+          `/api/sse?since=${encodeURIComponent(since)}` +
+          `&instanciaId=${encodeURIComponent(contact.instanciaId)}` +
+          `&uidUsuario=${encodeURIComponent(contact.uidUsuario)}`;
+        const es = new EventSource(sseUrl);
+        sseRef.current = es;
+        es.onmessage = (e) => {
+          try {
+            const newMsgs: MessageDTO[] = JSON.parse(e.data);
+            if (newMsgs.length > 0) {
+              setMessages((prev) => (prev ? [...prev, ...newMsgs] : newMsgs));
+            }
+          } catch {
+            // ignore malformed SSE data
+          }
+        };
       })
       .catch(() => {
         if (alive) {
@@ -146,6 +172,8 @@ export function ConversationView({
       });
     return () => {
       alive = false;
+      sseRef.current?.close();
+      sseRef.current = null;
     };
   }, [contact.instanciaId, contact.uidUsuario, reload]);
 
@@ -169,13 +197,16 @@ export function ConversationView({
           <ArrowLeft className="size-5" />
         </button>
         <Avatar className="h-9 w-9">
+          {contact.fotoPerfil && (
+            <AvatarImage src={contact.fotoPerfil} alt={contact.nombre ?? contact.uidUsuario} />
+          )}
           <AvatarFallback className={avatarColor(contact.uidUsuario)}>
-            {initialOf(contact.uidUsuario)}
+            {initialOf(contact.nombre ?? contact.username ?? contact.uidUsuario)}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium leading-tight">
-            {contact.uidUsuario}
+            {contact.nombre ?? contact.username ?? contact.uidUsuario}
           </p>
           <div className="mt-1">
             <ChannelBadge canal={contact.canal} size="xs" />
@@ -214,6 +245,7 @@ export function ConversationView({
             {messages.map((m, i) => {
               const isBot = m.rol === "bot";
               const isHuman = m.rol === "human";
+              const isPage = m.rol === "page";
               const showDay =
                 i === 0 ||
                 dayLabel(messages[i - 1].enviadoAt) !== dayLabel(m.enviadoAt);
@@ -232,13 +264,13 @@ export function ConversationView({
                     transition={{ duration: 0.18, ease: "easeOut" }}
                     className={cn(
                       "flex",
-                      isBot || isHuman ? "justify-end" : "justify-start",
+                      isBot || isHuman || isPage ? "justify-end" : "justify-start",
                     )}
                   >
                     <div
                       className={cn(
                         "max-w-[82%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%]",
-                        isBot
+                        isBot || isPage
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : isHuman
                             ? "rounded-br-md bg-emerald-700 text-white"
@@ -248,7 +280,7 @@ export function ConversationView({
                       <MessageMedia
                         tipoMedia={m.tipoMedia}
                         mediaUrl={m.mediaUrl}
-                        dark={isBot || isHuman}
+                        dark={isBot || isHuman || isPage}
                       />
                       {m.contenido && m.contenido.trim() ? (
                         <p className="whitespace-pre-wrap break-words">
@@ -262,7 +294,7 @@ export function ConversationView({
                       <p
                         className={cn(
                           "mt-1 text-right text-[10px]",
-                          isBot || isHuman
+                          isBot || isHuman || isPage
                             ? "text-white/70"
                             : "text-muted-foreground",
                         )}

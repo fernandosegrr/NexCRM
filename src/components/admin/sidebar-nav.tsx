@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Store, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, MessageSquare, Store, Users, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/negocios", label: "Negocios", icon: Store },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/mensajes", label: "Mensajes", icon: MessageSquare },
+  { href: "/admin/auditoria", label: "Auditoría", icon: ClipboardList },
 ];
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {

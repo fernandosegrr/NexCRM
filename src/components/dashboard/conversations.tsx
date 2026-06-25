@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessagesSquare, RotateCw, Search, Users, WifiOff } from "lucide-react";
+import type { MessageDTO } from "@/lib/data";
 
 const CANALES = [
   { value: "", label: "Todos" },
@@ -12,7 +13,7 @@ const CANALES = [
 
 import type { ConversationContact } from "@/lib/data";
 import { avatarColor, initialOf, relativeTime, truncate } from "@/lib/format";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -99,6 +100,7 @@ export function Conversations() {
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const listSseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -170,6 +172,72 @@ export function Conversations() {
     return () => ob.disconnect();
   }, [loadMore]);
 
+  // SSE: update contact list preview when new messages arrive for other contacts
+  useEffect(() => {
+    if (loading) return;
+    listSseRef.current?.close();
+
+    const since = new Date().toISOString();
+    const es = new EventSource(`/api/sse?since=${encodeURIComponent(since)}`);
+    listSseRef.current = es;
+
+    es.onmessage = (e) => {
+      try {
+        const newMsgs: MessageDTO[] = JSON.parse(e.data);
+        setContacts((prev) => {
+          let updated = [...prev];
+          for (const msg of newMsgs) {
+            const idx = updated.findIndex(
+              (c) =>
+                c.instanciaId === msg.instanciaId &&
+                c.uidUsuario === msg.uidUsuario,
+            );
+            if (idx >= 0) {
+              // Update preview of existing contact
+              updated[idx] = {
+                ...updated[idx],
+                lastContent: msg.contenido,
+                lastRol: msg.rol,
+                lastTipoMedia: msg.tipoMedia,
+                lastAt: msg.enviadoAt,
+                total: updated[idx].total + 1,
+              };
+              // Move to top
+              const [contact] = updated.splice(idx, 1);
+              updated = [contact, ...updated];
+            } else {
+              // New contact: prepend with minimal info
+              updated = [
+                {
+                  instanciaId: msg.instanciaId,
+                  uidUsuario: msg.uidUsuario,
+                  canal: msg.canal,
+                  lastContent: msg.contenido,
+                  lastRol: msg.rol,
+                  lastTipoMedia: msg.tipoMedia,
+                  lastAt: msg.enviadoAt,
+                  total: 1,
+                  nombre: null,
+                  username: null,
+                  fotoPerfil: null,
+                },
+                ...updated,
+              ];
+            }
+          }
+          return updated;
+        });
+      } catch {
+        // ignore malformed SSE data
+      }
+    };
+
+    return () => {
+      listSseRef.current?.close();
+      listSseRef.current = null;
+    };
+  }, [loading]);
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Lista de contactos */}
@@ -231,14 +299,17 @@ export function Conversations() {
                         )}
                       >
                         <Avatar className="h-11 w-11 shrink-0">
+                          {c.fotoPerfil && (
+                            <AvatarImage src={c.fotoPerfil} alt={c.nombre ?? c.uidUsuario} />
+                          )}
                           <AvatarFallback className={avatarColor(c.uidUsuario)}>
-                            {initialOf(c.uidUsuario)}
+                            {initialOf(c.nombre ?? c.username ?? c.uidUsuario)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-sm font-medium">
-                              {c.uidUsuario}
+                              {c.nombre ?? c.username ?? c.uidUsuario}
                             </span>
                             <span className="shrink-0 text-[11px] text-muted-foreground">
                               {relativeTime(c.lastAt)}
@@ -248,7 +319,7 @@ export function Conversations() {
                             <div className="flex min-w-0 items-center gap-1.5">
                               <ChannelBadge canal={c.canal} size="xs" />
                               <span className="truncate text-xs text-muted-foreground">
-                                {c.lastRol === "bot"
+                                {c.lastRol === "bot" || c.lastRol === "page"
                                   ? "Bot: "
                                   : c.lastRol === "human"
                                     ? "Tú: "
