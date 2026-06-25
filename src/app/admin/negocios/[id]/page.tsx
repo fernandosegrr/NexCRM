@@ -5,7 +5,7 @@ import { ArrowLeft, Bot, MessageSquare, Users } from "lucide-react";
 
 import { getBusinessById } from "@/lib/data";
 import { buildN8nSnippets } from "@/lib/n8n-snippets";
-import { isCanal, type Canal } from "@/lib/channels";
+import { isCanal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
@@ -94,6 +94,19 @@ export default async function BusinessDetailPage({
     process.env.NEXTAUTH_URL ||
     "https://postgres-nexcrm.d6cr6o.easypanel.host";
 
+  const waInstances = business.instancias.filter((i) => i.canal === "whatsapp");
+  const igMsgInstances = business.instancias.filter(
+    (i) => i.canal === "instagram" || i.canal === "messenger",
+  );
+
+  const waSnippets = waInstances.length > 0
+    ? buildN8nSnippets("whatsapp", appUrl)
+    : null;
+  // Instagram y Messenger producen snippets idénticos; se generan una sola vez.
+  const igMsgSnippets = igMsgInstances.length > 0
+    ? buildN8nSnippets("instagram", appUrl)
+    : null;
+
   return (
     <div className="space-y-8">
       <div>
@@ -151,47 +164,77 @@ export default async function BusinessDetailPage({
             Este negocio no tiene instancias registradas.
           </p>
         ) : (
-          business.instancias.map((inst) => {
-            const canal: Canal = isCanal(inst.canal) ? inst.canal : "whatsapp";
-            const snippets = buildN8nSnippets(canal, inst.instanciaId, appUrl);
-            return (
-              <div
-                key={inst.id}
-                className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5"
-              >
+          <div className="space-y-6">
+            {/* ── WhatsApp ── */}
+            {waSnippets && (
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <ChannelBadge canal={inst.canal} />
-                  <code className="rounded bg-muted px-2 py-1 text-xs">
-                    {inst.instanciaId}
-                  </code>
+                  <ChannelBadge canal="whatsapp" />
+                  {waInstances.map((i) => (
+                    <code key={i.id} className="rounded bg-muted px-2 py-1 text-xs">
+                      {i.instanciaId}
+                    </code>
+                  ))}
                 </div>
-                <div className="space-y-4">
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <SnippetBlock
-                      title="Nodo de inicio"
-                      rol="user"
-                      code={snippets.inicio}
-                      filename={`crm-${canal}-inicio.json`}
-                    />
-                    <SnippetBlock
-                      title="Nodo final (respuesta del bot)"
-                      rol="bot"
-                      code={snippets.fin}
-                      filename={`crm-${canal}-fin.json`}
-                    />
-                  </div>
-                  {snippets.humanReply && (
-                    <SnippetBlock
-                      title="Nodo respuesta humana (fromMe=true, solo WhatsApp)"
-                      rol="human"
-                      code={snippets.humanReply}
-                      filename={`crm-${canal}-human-reply.json`}
-                    />
-                  )}
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <SnippetBlock
+                    title="Inicio (usuario)"
+                    rol="user"
+                    code={waSnippets.inicio}
+                    filename="crm-whatsapp-inicio.json"
+                  />
+                  <SnippetBlock
+                    title="Respuesta humana (fromMe=true)"
+                    rol="human"
+                    code={waSnippets.humanReply}
+                    filename="crm-whatsapp-human-reply.json"
+                  />
+                  <SnippetBlock
+                    title="Respuesta del bot (fin)"
+                    rol="bot"
+                    code={waSnippets.fin}
+                    filename="crm-whatsapp-fin.json"
+                  />
                 </div>
               </div>
-            );
-          })
+            )}
+
+            {/* ── Instagram + Messenger (mismo formato Meta) ── */}
+            {igMsgSnippets && (
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {igMsgInstances.map((i) => (
+                    <ChannelBadge key={i.id} canal={isCanal(i.canal) ? i.canal : "instagram"} />
+                  ))}
+                  {igMsgInstances.map((i) => (
+                    <code key={i.id} className="rounded bg-muted px-2 py-1 text-xs">
+                      {i.instanciaId}
+                    </code>
+                  ))}
+                </div>
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <SnippetBlock
+                    title="Inicio (usuario)"
+                    rol="user"
+                    code={igMsgSnippets.inicio}
+                    filename="crm-ig-messenger-inicio.json"
+                  />
+                  <SnippetBlock
+                    title="Respuesta humana (fromMe=true)"
+                    rol="human"
+                    code={igMsgSnippets.humanReply}
+                    filename="crm-ig-messenger-human-reply.json"
+                  />
+                  <SnippetBlock
+                    title="Respuesta del bot (fin)"
+                    rol="bot"
+                    code={igMsgSnippets.fin}
+                    filename="crm-ig-messenger-fin.json"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </section>
     </div>

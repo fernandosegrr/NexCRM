@@ -34,16 +34,16 @@ function wrap(node: Record<string, unknown>): string {
 
 export type N8nSnippets = {
   inicio: string;
+  humanReply: string;
   fin: string;
-  /** Solo WhatsApp: registra mensajes salientes del operador (rama fromMe=true). */
-  humanReply?: string;
 };
 
-export function buildN8nSnippets(
-  canal: Canal,
-  instanciaId: string,
-  appUrl: string,
-): N8nSnippets {
+/**
+ * Genera los 3 snippets n8n para un canal.
+ * `instanciaId` no hace falta: todas las expresiones son dinámicas.
+ * Instagram y Messenger producen snippets idénticos (mismo formato Meta).
+ */
+export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
   const url = `${appUrl.replace(/\/$/, "")}/api/messages`;
 
   if (canal === "whatsapp") {
@@ -60,19 +60,7 @@ export function buildN8nSnippets(
       ],
       0,
     );
-    const fin = httpNode(
-      "CRM · Respuesta del bot (fin)",
-      url,
-      [
-        ["instanciaId", "={{ $('Webhook').item.json.body.instance }}"],
-        ["canal", "whatsapp"],
-        ["uidUsuario", "={{ $('numero_combinado').item.json.numero_whatsapp }}"],
-        ["rol", "bot"],
-        ["contenido", "={{ $json.output }}"],
-      ],
-      320,
-    );
-    // Rama fromMe=true: el operador responde manualmente desde el teléfono.
+    // fromMe=true: operador responde manualmente desde el teléfono.
     // remoteJid tiene formato 521XXXXXXXXXX@s.whatsapp.net — se extrae solo el número.
     const humanReply = httpNode(
       "CRM · Respuesta humana",
@@ -84,12 +72,25 @@ export function buildN8nSnippets(
         ["rol", "human"],
         ["contenido", "={{ $('Webhook').item.json.body.data.message.conversation ?? $('Webhook').item.json.body.data.message.extendedTextMessage?.text ?? '' }}"],
       ],
+      320,
+    );
+    const fin = httpNode(
+      "CRM · Respuesta del bot (fin)",
+      url,
+      [
+        ["instanciaId", "={{ $('Webhook').item.json.body.instance }}"],
+        ["canal", "whatsapp"],
+        ["uidUsuario", "={{ $('numero_combinado').item.json.numero_whatsapp }}"],
+        ["rol", "bot"],
+        ["contenido", "={{ $json.output }}"],
+      ],
       640,
     );
-    return { inicio: wrap(inicio), fin: wrap(fin), humanReply: wrap(humanReply) };
+    return { inicio: wrap(inicio), humanReply: wrap(humanReply), fin: wrap(fin) };
   }
 
-  // Instagram / Messenger
+  // Instagram y Messenger usan el mismo formato de webhook Meta.
+  // fromMe=true (message echo): sender.id = página, recipient.id = cliente.
   const inicio = httpNode(
     "CRM · Mensaje del usuario (inicio)",
     url,
@@ -102,6 +103,19 @@ export function buildN8nSnippets(
     ],
     0,
   );
+  const humanReply = httpNode(
+    "CRM · Respuesta humana",
+    url,
+    [
+      ["instanciaId", "={{ $('Webhook').item.json.body.entry[0].id }}"],
+      ["canal", "={{ $('Webhook').item.json.body.object }}"],
+      // En un echo el sender es la página; el cliente es el recipient
+      ["uidUsuario", "={{ $('Webhook').item.json.body.entry[0].messaging[0].recipient.id }}"],
+      ["rol", "human"],
+      ["contenido", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? '' }}"],
+    ],
+    320,
+  );
   const fin = httpNode(
     "CRM · Respuesta del bot (fin)",
     url,
@@ -112,7 +126,7 @@ export function buildN8nSnippets(
       ["rol", "bot"],
       ["contenido", "={{ $json.output }}"],
     ],
-    320,
+    640,
   );
-  return { inicio: wrap(inicio), fin: wrap(fin) };
+  return { inicio: wrap(inicio), humanReply: wrap(humanReply), fin: wrap(fin) };
 }
