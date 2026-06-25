@@ -48,8 +48,14 @@ export function ReplyInput({
     const file = e.target.files?.[0];
     if (!file) return;
     const tipoMedia = getMimeCategory(file);
+    const isMeta = canal === "instagram" || canal === "messenger";
     if (tipoMedia === "audio" && canal === "instagram") {
       toast.error("Instagram no soporta envío de audio desde la API.");
+      e.target.value = "";
+      return;
+    }
+    if (tipoMedia === "document" && isMeta) {
+      toast.error(`${canal === "instagram" ? "Instagram" : "Messenger"} no soporta envío de documentos desde la API.`);
       e.target.value = "";
       return;
     }

@@ -228,10 +228,17 @@ export async function POST(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  // Instagram DM API no soporta audio
-  if (inst.canal === "instagram" && tipoMedia === "audio") {
+  // Instagram DM API: solo texto e imágenes
+  if (inst.canal === "instagram" && (tipoMedia === "audio" || tipoMedia === "document")) {
     return NextResponse.json(
-      { error: "Instagram no admite envío de audio desde la API de mensajería" },
+      { error: `Instagram no admite envío de ${tipoMedia === "audio" ? "audio" : "documentos"} desde la API de mensajería` },
+      { status: 422 },
+    );
+  }
+  // Messenger API: no soporta documentos
+  if (inst.canal === "messenger" && tipoMedia === "document") {
+    return NextResponse.json(
+      { error: "Messenger no admite envío de documentos desde la API de mensajería" },
       { status: 422 },
     );
   }

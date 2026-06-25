@@ -157,7 +157,12 @@ export function ConversationView({
           try {
             const newMsgs: MessageDTO[] = JSON.parse(e.data);
             if (newMsgs.length > 0) {
-              setMessages((prev) => (prev ? [...prev, ...newMsgs] : newMsgs));
+              setMessages((prev) => {
+                if (!prev) return newMsgs;
+                const existingIds = new Set(prev.map((m) => m.id));
+                const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+                return fresh.length > 0 ? [...prev, ...fresh] : prev;
+              });
             }
           } catch {
             // ignore malformed SSE data
