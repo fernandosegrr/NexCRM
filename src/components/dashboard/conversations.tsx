@@ -171,7 +171,7 @@ export function Conversations() {
   }, [loadMore]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Lista de contactos */}
       <div
         className={cn(
@@ -280,7 +280,7 @@ export function Conversations() {
       {/* Conversación */}
       <div
         className={cn(
-          "min-w-0 flex-1",
+          "min-w-0 flex-1 overflow-hidden",
           selected
             ? "flex max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-background"
             : "hidden md:flex",

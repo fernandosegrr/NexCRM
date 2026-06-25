@@ -38,7 +38,7 @@ export default async function DashboardLayout({
         <div className="flex-1" />
         <UserMenu nombre={session.user.nombre} email={session.user.email} />
       </header>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
   );
 }

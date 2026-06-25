@@ -54,15 +54,17 @@ function SnippetBlock({
   filename,
 }: {
   title: string;
-  rol: "user" | "bot";
+  rol: "user" | "bot" | "human";
   code: string;
   filename: string;
 }) {
+  const badgeVariant =
+    rol === "bot" ? "default" : rol === "human" ? "success" : "muted";
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background/50">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <Badge variant={rol === "bot" ? "default" : "muted"}>{rol}</Badge>
+          <Badge variant={badgeVariant}>{rol}</Badge>
           <span className="text-sm font-medium">{title}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -163,19 +165,29 @@ export default async function BusinessDetailPage({
                     {inst.instanciaId}
                   </code>
                 </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <SnippetBlock
-                    title="Nodo de inicio"
-                    rol="user"
-                    code={snippets.inicio}
-                    filename={`crm-${canal}-inicio.json`}
-                  />
-                  <SnippetBlock
-                    title="Nodo final"
-                    rol="bot"
-                    code={snippets.fin}
-                    filename={`crm-${canal}-fin.json`}
-                  />
+                <div className="space-y-4">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <SnippetBlock
+                      title="Nodo de inicio"
+                      rol="user"
+                      code={snippets.inicio}
+                      filename={`crm-${canal}-inicio.json`}
+                    />
+                    <SnippetBlock
+                      title="Nodo final (respuesta del bot)"
+                      rol="bot"
+                      code={snippets.fin}
+                      filename={`crm-${canal}-fin.json`}
+                    />
+                  </div>
+                  {snippets.humanReply && (
+                    <SnippetBlock
+                      title="Nodo respuesta humana (fromMe=true, solo WhatsApp)"
+                      rol="human"
+                      code={snippets.humanReply}
+                      filename={`crm-${canal}-human-reply.json`}
+                    />
+                  )}
                 </div>
               </div>
             );

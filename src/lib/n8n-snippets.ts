@@ -35,6 +35,8 @@ function wrap(node: Record<string, unknown>): string {
 export type N8nSnippets = {
   inicio: string;
   fin: string;
+  /** Solo WhatsApp: registra mensajes salientes del operador (rama fromMe=true). */
+  humanReply?: string;
 };
 
 export function buildN8nSnippets(
@@ -70,7 +72,21 @@ export function buildN8nSnippets(
       ],
       320,
     );
-    return { inicio: wrap(inicio), fin: wrap(fin) };
+    // Rama fromMe=true: el operador responde manualmente desde el teléfono.
+    // remoteJid tiene formato 521XXXXXXXXXX@s.whatsapp.net — se extrae solo el número.
+    const humanReply = httpNode(
+      "CRM · Respuesta humana",
+      url,
+      [
+        ["instanciaId", "={{ $('Webhook').item.json.body.instance }}"],
+        ["canal", "whatsapp"],
+        ["uidUsuario", "={{ $('Webhook').item.json.body.data.key.remoteJid?.split('@')[0] ?? '' }}"],
+        ["rol", "human"],
+        ["contenido", "={{ $('Webhook').item.json.body.data.message.conversation ?? $('Webhook').item.json.body.data.message.extendedTextMessage?.text ?? '' }}"],
+      ],
+      640,
+    );
+    return { inicio: wrap(inicio), fin: wrap(fin), humanReply: wrap(humanReply) };
   }
 
   // Instagram / Messenger

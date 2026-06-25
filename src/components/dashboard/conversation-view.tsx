@@ -99,7 +99,7 @@ export function ConversationView({
   }, [messages, error]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       {/* Encabezado de la conversación */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
