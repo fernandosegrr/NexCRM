@@ -15,7 +15,8 @@ export async function resolveContact(
     const existing = await prisma.contact.findUnique({
       where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
     });
-    if (existing) return;
+    // Skip only if already resolved with at least one data field
+    if (existing && (existing.nombre || existing.username || existing.fotoPerfil)) return;
 
     let nombre: string | null = null;
     let username: string | null = null;
@@ -89,8 +90,10 @@ export async function resolveContact(
       }
     }
 
-    await prisma.contact.create({
-      data: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil },
+    await prisma.contact.upsert({
+      where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+      create: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil },
+      update: { nombre, username, fotoPerfil, resolvedAt: new Date() },
     });
   } catch {
     // Never throw — contact resolution is best-effort
