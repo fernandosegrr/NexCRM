@@ -46,7 +46,13 @@ export function ConversationView({
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
 
-  function handleReplySent(msg: { id: string; contenido: string; enviadoAt: string }) {
+  function handleReplySent(msg: {
+    id: string;
+    contenido: string | null;
+    tipoMedia: string;
+    mediaUrl: string | null;
+    enviadoAt: string;
+  }) {
     const newMsg: MessageDTO = {
       id: msg.id,
       instanciaId: contact.instanciaId,
@@ -56,7 +62,7 @@ export function ConversationView({
       uidUsuario: contact.uidUsuario,
       rol: "human",
       contenido: msg.contenido,
-      tipoMedia: "text",
+      tipoMedia: msg.tipoMedia,
       enviadoAt: msg.enviadoAt,
       latenciaMs: null,
     };

@@ -208,8 +208,10 @@ export function buildN8nPrompt(channels: {
           {
             label: '`CRM · Respuesta humana` — rol: human',
             placement:
-              "En la salida del nodo If o Switch que detecta mensajes echo (mensajes enviados por la propia página, is_echo=true o fromMe equivalente). " +
-              "DEAD END: sin conexión de salida.",
+              "En la salida TRUE del nodo If que detecta is_echo=true. " +
+              "DEAD END: sin conexión de salida. " +
+              "IMPORTANTE: uidUsuario = recipient.id (el cliente), NO sender.id — " +
+              "en un echo, sender.id es el ID de la propia página Meta.",
             json: s.humanReply,
           },
           {

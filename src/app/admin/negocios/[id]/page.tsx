@@ -10,6 +10,7 @@ import { shortDate } from "@/lib/format";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadButton } from "@/components/download-button";
+import { MetaTokenForm, type MetaTokenStatus } from "@/components/admin/meta-token-form";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -87,8 +88,6 @@ export default async function BusinessDetailPage({
   const business = await getBusinessById(params.id);
   if (!business) notFound();
 
-  // URL pública para los snippets de n8n. Se lee en RUNTIME (no NEXT_PUBLIC_,
-  // así no requiere build-arg): usa APP_URL si existe, si no NEXTAUTH_URL.
   const appUrl =
     process.env.APP_URL ||
     process.env.NEXTAUTH_URL ||
@@ -102,7 +101,6 @@ export default async function BusinessDetailPage({
   const waSnippets = waInstances.length > 0
     ? buildN8nSnippets("whatsapp", appUrl)
     : null;
-  // Instagram y Messenger producen snippets idénticos; se generan una sola vez.
   const igMsgSnippets = igMsgInstances.length > 0
     ? buildN8nSnippets("instagram", appUrl)
     : null;
@@ -151,6 +149,50 @@ export default async function BusinessDetailPage({
         <Stat icon={Users} value={business.totalUsuarios} label="Usuarios" />
       </div>
 
+      {/* ── Credenciales Meta ── */}
+      {igMsgInstances.length > 0 && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Credenciales Meta</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Page Access Token por instancia. Necesario para enviar mensajes
+              desde el CRM hacia Instagram DM y Messenger. El Page ID se detecta
+              automáticamente al verificar el token.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {igMsgInstances.map((i) => {
+              const status: MetaTokenStatus = {
+                hasToken: i.metaHasToken,
+                pageId: i.metaPageId ?? null,
+                setAt: i.metaTokenSetAt,
+                expiresAt: i.metaTokenExpiresAt,
+              };
+              return (
+                <div
+                  key={i.id}
+                  className="rounded-xl border border-border bg-card p-4 sm:p-5"
+                >
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <ChannelBadge canal={isCanal(i.canal) ? i.canal : "instagram"} />
+                    <code className="rounded bg-muted px-2 py-1 text-xs">
+                      {i.instanciaId}
+                    </code>
+                  </div>
+                  <MetaTokenForm
+                    instanceId={i.id}
+                    canal={i.canal}
+                    initialStatus={status}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Integración n8n ── */}
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Integración n8n</h2>
@@ -245,7 +287,7 @@ export default async function BusinessDetailPage({
                     filename="crm-ig-messenger-inicio.json"
                   />
                   <SnippetBlock
-                    title="Respuesta humana (fromMe=true)"
+                    title="Respuesta humana (echo=true)"
                     rol="human"
                     code={igMsgSnippets.humanReply}
                     filename="crm-ig-messenger-human-reply.json"

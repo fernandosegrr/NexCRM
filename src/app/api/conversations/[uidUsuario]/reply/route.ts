@@ -8,10 +8,16 @@ export const dynamic = "force-dynamic";
 
 const replySchema = z.object({
   instanciaId: z.string().min(1),
-  contenido: z.string().min(1).max(4000),
+  contenido: z.string().max(4000).optional(),
+  mediaUrl: z.string().url().optional(),
+  tipoMedia: z
+    .enum(["text", "image", "audio", "video", "document"])
+    .default("text"),
 });
 
-async function sendWhatsApp(
+// ── WhatsApp (Evolution API v2) ─────────────────────────────────────────────
+
+async function sendWhatsAppText(
   instanciaId: string,
   numero: string,
   texto: string,
@@ -34,6 +40,105 @@ async function sendWhatsApp(
   }
 }
 
+async function sendWhatsAppMedia(
+  instanciaId: string,
+  numero: string,
+  mediaUrl: string,
+  tipoMedia: string,
+  caption?: string,
+): Promise<boolean> {
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  if (!apiUrl || !apiKey) return false;
+  try {
+    const res = await fetch(
+      `${apiUrl.replace(/\/$/, "")}/message/sendMedia/${instanciaId}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: apiKey },
+        body: JSON.stringify({
+          number: numero,
+          mediatype: tipoMedia,
+          media: mediaUrl,
+          caption: caption ?? "",
+          ...(tipoMedia === "document"
+            ? { fileName: mediaUrl.split("/").pop() ?? "archivo" }
+            : {}),
+        }),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── Meta Graph API (Instagram DM + Messenger) ───────────────────────────────
+
+async function sendMetaText(
+  pageId: string,
+  token: string,
+  recipientId: string,
+  texto: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${pageId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: texto },
+        }),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function sendMetaMedia(
+  pageId: string,
+  token: string,
+  recipientId: string,
+  mediaUrl: string,
+  tipoMedia: string,
+): Promise<boolean> {
+  // Meta uses "file" for documents, rest maps 1:1
+  const metaType = tipoMedia === "document" ? "file" : tipoMedia;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${pageId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: {
+            attachment: {
+              type: metaType,
+              payload: { url: mediaUrl, is_reusable: true },
+            },
+          },
+        }),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── Handler ─────────────────────────────────────────────────────────────────
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { uidUsuario: string } },
@@ -55,7 +160,15 @@ export async function POST(
     return NextResponse.json({ error: "Payload inválido" }, { status: 422 });
   }
 
-  const { instanciaId, contenido } = parsed.data;
+  const { instanciaId, contenido, mediaUrl, tipoMedia } = parsed.data;
+
+  if (!contenido && !mediaUrl) {
+    return NextResponse.json(
+      { error: "Se requiere contenido o mediaUrl" },
+      { status: 422 },
+    );
+  }
+
   const uidUsuario = decodeURIComponent(params.uidUsuario);
 
   const inst = await prisma.businessInstance.findFirst({
@@ -75,10 +188,21 @@ export async function POST(
   }
 
   let sent = false;
+  const isMedia = !!mediaUrl && tipoMedia !== "text";
+
   if (inst.canal === "whatsapp") {
-    sent = await sendWhatsApp(instanciaId, uidUsuario, contenido);
+    sent = isMedia
+      ? await sendWhatsAppMedia(instanciaId, uidUsuario, mediaUrl!, tipoMedia, contenido)
+      : await sendWhatsAppText(instanciaId, uidUsuario, contenido!);
+  } else if (
+    (inst.canal === "instagram" || inst.canal === "messenger") &&
+    inst.metaPageId &&
+    inst.metaPageAccessToken
+  ) {
+    sent = isMedia
+      ? await sendMetaMedia(inst.metaPageId, inst.metaPageAccessToken, uidUsuario, mediaUrl!, tipoMedia)
+      : await sendMetaText(inst.metaPageId, inst.metaPageAccessToken, uidUsuario, contenido!);
   }
-  // Instagram/Messenger: solo se registra; envío requiere META_PAGE_ACCESS_TOKEN por página
 
   const msg = await prisma.message.create({
     data: {
@@ -88,14 +212,21 @@ export async function POST(
       canal: inst.canal,
       uidUsuario,
       rol: "human",
-      contenido,
-      tipoMedia: "text",
+      contenido: contenido ?? null,
+      tipoMedia: isMedia ? tipoMedia : "text",
+      ...(mediaUrl ? { metadata: { url: mediaUrl } } : {}),
     },
     select: { id: true, enviadoAt: true },
   });
 
   return NextResponse.json(
-    { id: msg.id.toString(), enviadoAt: msg.enviadoAt.toISOString(), sent },
+    {
+      id: msg.id.toString(),
+      enviadoAt: msg.enviadoAt.toISOString(),
+      tipoMedia: isMedia ? tipoMedia : "text",
+      mediaUrl: mediaUrl ?? null,
+      sent,
+    },
     { status: 201 },
   );
 }

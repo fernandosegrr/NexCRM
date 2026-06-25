@@ -38,6 +38,12 @@ model BusinessInstance {
   activo      Boolean  @default(true)
   creadoAt    DateTime @default(now())
 
+  // Meta credentials (instagram | messenger only)
+  metaPageId          String?   // Facebook Page ID (auto-derived on token save)
+  metaPageAccessToken String?   // Page Access Token
+  metaTokenSetAt      DateTime? // Last time token was saved
+  metaTokenExpiresAt  DateTime? // null = permanent (Messenger); 60d = Instagram
+
   @@unique([canal, instanciaId])
   @@index([businessId])
   @@map("business_instances")
