@@ -48,6 +48,11 @@ export function ReplyInput({
     const file = e.target.files?.[0];
     if (!file) return;
     const tipoMedia = getMimeCategory(file);
+    if (tipoMedia === "audio" && canal === "instagram") {
+      toast.error("Instagram no soporta envío de audio desde la API.");
+      e.target.value = "";
+      return;
+    }
     const previewUrl =
       tipoMedia === "image" ? URL.createObjectURL(file) : null;
     setMedia({ file, previewUrl, tipoMedia });

@@ -228,6 +228,14 @@ export async function POST(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
+  // Instagram DM API no soporta audio
+  if (inst.canal === "instagram" && tipoMedia === "audio") {
+    return NextResponse.json(
+      { error: "Instagram no admite envío de audio desde la API de mensajería" },
+      { status: 422 },
+    );
+  }
+
   let sent = false;
   let noToken = false;
   const isMedia = !!mediaUrl && tipoMedia !== "text";
