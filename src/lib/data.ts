@@ -229,8 +229,17 @@ export async function getConversations(
   const skip = Math.max(opts?.skip ?? 0, 0);
   const search = opts?.search?.trim();
   const canal = opts?.canal?.trim();
+  const likeSearch = "%" + search + "%";
   const searchFilter = search
-    ? Prisma.sql`AND m."uidUsuario" ILIKE ${"%" + search + "%"}`
+    ? Prisma.sql`AND (
+        m."uidUsuario" ILIKE ${likeSearch}
+        OR EXISTS (
+          SELECT 1 FROM "contacts" ct2
+          WHERE ct2."instanciaId" = m."instanciaId"
+            AND ct2."uidUsuario" = m."uidUsuario"
+            AND (ct2."nombre" ILIKE ${likeSearch} OR ct2."username" ILIKE ${likeSearch})
+        )
+      )`
     : Prisma.empty;
   const canalFilter = canal
     ? Prisma.sql`AND m."canal" = ${canal}`

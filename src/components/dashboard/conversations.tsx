@@ -255,7 +255,7 @@ export function Conversations() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar contacto…"
+                placeholder="Nombre, usuario o número…"
                 className="pl-10"
               />
             </div>
