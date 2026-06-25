@@ -15,8 +15,16 @@ export async function resolveContact(
     const existing = await prisma.contact.findUnique({
       where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
     });
-    // Skip only if already resolved with at least one data field
-    if (existing && (existing.nombre || existing.username || existing.fotoPerfil)) return;
+    if (existing) {
+      const hasName  = !!(existing.nombre || existing.username);
+      const hasPhoto = !!existing.fotoPerfil;
+      // IG/Messenger: photos never available via API — skip once name is resolved
+      if ((canal === "instagram" || canal === "messenger") && hasName) return;
+      // WA: retry while photo is still missing; skip only when fully resolved
+      if (canal === "whatsapp" && hasName && hasPhoto) return;
+      // Any canal: skip if nothing can be improved
+      if (hasName && hasPhoto) return;
+    }
 
     let nombre: string | null = null;
     let username: string | null = null;
