@@ -119,31 +119,64 @@ Detalle de placement de nodos: `docs/integracion-n8n.md`.
 Ingesta de mensajes, dashboard de conversaciones, toggle de bot (ESTATUS), respuesta
 humana WhatsApp, snippets n8n, baseline de monitoreo limpio.
 
-### Phase 2 — EN PROGRESO
-**Hecho (esta tanda, pusheado):**
+### Phase 2 — DONE (desplegado)
 - Gestión de credenciales Meta en el admin (token por instancia, validación, aviso de
   expiración a 60 días para Instagram).
 - Respuesta humana para Instagram/Messenger vía Graph API (host correcto por canal).
 - Multimedia completa: upload a Cloudinary, envío por WA (sendMedia + sendWhatsAppAudio)
   y Meta (attachments), render de imagen/video/audio/documento en el hilo.
+- Actualizaciones en tiempo real vía SSE (polling cada 3s, `X-Accel-Buffering: no`).
+- Nombres y fotos de contacto resueltos asincrónicamente:
+  - WA → Evolution API `whatsappNumbers` (pushName) + `fetchProfile` POST (foto).
+  - Instagram → `graph.instagram.com/{uid}?fields=name,username` (token IGAA).
+  - Messenger → `graph.facebook.com/{META_VERSION}/{pageId}/conversations?user_id=`.
+  - Reintentos automáticos mientras falten datos; SSE emite `event:contact` al resolverse
+    para actualizar lista y conversación abierta sin recargar.
+- Dedup de mensajes en ingesta: contenido idéntico en ventana de 5s (cubre ecos Meta
+  y retries de webhook n8n). `rol:page` sin contenido + human reciente = eco de media.
+- Documentos bloqueados para IG/Messenger (UI + 422 server); audio bloqueado para IG.
+- Resúmenes con IA (`POST /api/summary`): conversación individual o período
+  (día / 7 días / mes / trimestre) vía `gpt-5.4-mini`. AbortController cancela
+  requests previas al cambiar período.
+- Búsqueda por nombre, username y número de teléfono (EXISTS subquery sobre contacts).
+- Mobile: scroll del hilo, teclado virtual (`interactiveWidget: resizes-content`),
+  safe-area-inset-bottom, flex-col en overlay, dedup SSE por ID.
 
-**Pendiente:**
-- [ ] **Agregar env en EasyPanel y redeploy** (EVOLUTION_*, CLOUDINARY_*) — sin esto,
-      multimedia y envíos no funcionan en producción.
-- [ ] Actualizaciones en tiempo real (hoy requiere recargar; falta polling/WebSocket).
-- [ ] Nombres de contacto reales en vez del UID/número crudo.
+### Phase 3 — PENDIENTE
 - [ ] Contador de no leídos.
-- [ ] Búsqueda de conversaciones por contenido (hoy solo por uidUsuario).
 - [ ] Selector de negocio en el dashboard (hoy el admin cambia por URL).
+- [ ] Búsqueda por contenido de mensajes (hoy solo nombre/usuario/número).
+- [ ] Notificaciones push cuando llega mensaje nuevo.
+
+---
+
+## Endpoints clave — nuevos en Phase 2
+
+- `POST /api/summary` — genera resumen con gpt-5.4-mini. Body:
+  `{ type: "conversation", instanciaId, uidUsuario }` o
+  `{ type: "day"|"week"|"month"|"quarter" }`.
+  Requiere `OPENAI_API_KEY`. CLIENTE usa businessId de sesión; ADMIN lo pasa en body.
+- `GET /api/sse` — SSE bidireccional. Emite eventos default (mensajes) y
+  `event:contact` (nombre/foto resuelto). Params: `since`, `instanciaId?`, `uidUsuario?`.
+
+---
+
+## Anti-patterns conocidos
+- **`max_tokens` no funciona con gpt-5.4-mini** — usar `max_completion_tokens`.
+- **`fetchProfile` de Evolution API v2 es POST**, no GET. Body: `{ number: "521...@s.whatsapp.net" }`.
+- **Instagram usa `graph.instagram.com`**, Messenger usa `graph.facebook.com`. Los tokens
+  IGAA/EAAW no son intercambiables entre hosts.
+- **`rol:page`** = eco de Meta de mensajes salientes (bot o human). No es un mensaje del usuario.
+  Se deduplica en ingesta comparando contenido+ventana de tiempo.
 
 ---
 
 ## Variables de entorno
 
-Ver `.env.example`. Runtime (sin build-args, Next standalone). Las nuevas de esta tanda:
+Ver `.env.example`. Runtime (sin build-args, Next standalone). Variables activas:
 `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
-`CLOUDINARY_API_SECRET`. Los valores reales están en el `.env` local (gitignored) y deben
-copiarse a EasyPanel.
+`CLOUDINARY_API_SECRET`, `OPENAI_API_KEY`. Los valores reales en `.env` local (gitignored)
+y en EasyPanel.
 
 ---
 

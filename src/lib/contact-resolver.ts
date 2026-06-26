@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { META_VERSION } from "@/lib/meta";
 
 /**
  * Resolves a contact's name and profile photo from Meta Graph API or
@@ -50,7 +51,7 @@ export async function resolveContact(
       // Direct PSID lookup requires pages_user_profile (advanced access).
       try {
         const res = await fetch(
-          `https://graph.facebook.com/v23.0/${encodeURIComponent(instanciaId)}/conversations` +
+          `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(instanciaId)}/conversations` +
           `?fields=participants&user_id=${encodeURIComponent(uidUsuario)}&access_token=${encodeURIComponent(token)}`,
         );
         if (res.ok) {

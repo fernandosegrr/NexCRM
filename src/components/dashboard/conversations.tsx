@@ -240,20 +240,24 @@ export function Conversations() {
           username: string | null;
           fotoPerfil: string | null;
         }[] = JSON.parse((e as MessageEvent).data);
-        setContacts((prev) =>
-          prev.map((c) => {
-            const upd = updates.find(
-              (u) => u.instanciaId === c.instanciaId && u.uidUsuario === c.uidUsuario,
-            );
-            if (!upd) return c;
-            return {
-              ...c,
-              nombre:     upd.nombre     ?? c.nombre,
-              username:   upd.username   ?? c.username,
-              fotoPerfil: upd.fotoPerfil ?? c.fotoPerfil,
-            };
-          }),
-        );
+
+        const merge = <T extends { instanciaId: string; uidUsuario: string; nombre: string | null; username: string | null; fotoPerfil: string | null }>(
+          c: T,
+        ): T => {
+          const upd = updates.find(
+            (u) => u.instanciaId === c.instanciaId && u.uidUsuario === c.uidUsuario,
+          );
+          if (!upd) return c;
+          return {
+            ...c,
+            nombre:     upd.nombre     ?? c.nombre,
+            username:   upd.username   ?? c.username,
+            fotoPerfil: upd.fotoPerfil ?? c.fotoPerfil,
+          };
+        };
+
+        setContacts((prev) => prev.map(merge));
+        setSelected((prev) => (prev ? merge(prev) : prev));
       } catch {
         // ignore malformed contact event
       }

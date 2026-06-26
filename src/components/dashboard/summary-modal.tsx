@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bot, Calendar, Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -91,8 +91,13 @@ export function PeriodSummaryButton() {
   const [summary, setSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<{ period: string; conversations?: number } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   async function generate(p: Period) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     setLoading(true);
     setError(null);
     setSummary(null);
@@ -101,12 +106,14 @@ export function PeriodSummaryButton() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: p }),
+        signal: ctrl.signal,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al generar resumen");
       setSummary(data.summary);
       setMeta({ period: data.period, conversations: data.conversations });
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {
       setLoading(false);
