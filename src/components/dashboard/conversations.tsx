@@ -194,7 +194,6 @@ export function Conversations() {
                 c.uidUsuario === msg.uidUsuario,
             );
             if (idx >= 0) {
-              // Update preview of existing contact
               updated[idx] = {
                 ...updated[idx],
                 lastContent: msg.contenido,
@@ -203,11 +202,9 @@ export function Conversations() {
                 lastAt: msg.enviadoAt,
                 total: updated[idx].total + 1,
               };
-              // Move to top
               const [contact] = updated.splice(idx, 1);
               updated = [contact, ...updated];
             } else {
-              // New contact: prepend with minimal info
               updated = [
                 {
                   instanciaId: msg.instanciaId,
@@ -232,6 +229,35 @@ export function Conversations() {
         // ignore malformed SSE data
       }
     };
+
+    // Contact updates: resolver saves name/photo async after the first message
+    es.addEventListener("contact", (e) => {
+      try {
+        const updates: {
+          instanciaId: string;
+          uidUsuario: string;
+          nombre: string | null;
+          username: string | null;
+          fotoPerfil: string | null;
+        }[] = JSON.parse((e as MessageEvent).data);
+        setContacts((prev) =>
+          prev.map((c) => {
+            const upd = updates.find(
+              (u) => u.instanciaId === c.instanciaId && u.uidUsuario === c.uidUsuario,
+            );
+            if (!upd) return c;
+            return {
+              ...c,
+              nombre:     upd.nombre     ?? c.nombre,
+              username:   upd.username   ?? c.username,
+              fotoPerfil: upd.fotoPerfil ?? c.fotoPerfil,
+            };
+          }),
+        );
+      } catch {
+        // ignore malformed contact event
+      }
+    });
 
     return () => {
       listSseRef.current?.close();
