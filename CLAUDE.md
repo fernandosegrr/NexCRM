@@ -116,15 +116,12 @@ Detalle de placement de nodos: `docs/integracion-n8n.md`.
 ## Estado del proyecto
 
 ### Phase 1 — DONE (desplegado)
-Ingesta de mensajes, dashboard de conversaciones, toggle de bot (ESTATUS), respuesta
-humana WhatsApp, snippets n8n, baseline de monitoreo limpio.
-
-### Phase 2 — DONE (desplegado)
-- Gestión de credenciales Meta en el admin (token por instancia, validación, aviso de
-  expiración a 60 días para Instagram).
-- Respuesta humana para Instagram/Messenger vía Graph API (host correcto por canal).
+- Ingesta de mensajes, dashboard de conversaciones, toggle de bot (ESTATUS).
+- Respuesta humana WhatsApp + Instagram + Messenger vía Graph API (host correcto por canal).
 - Multimedia completa: upload a Cloudinary, envío por WA (sendMedia + sendWhatsAppAudio)
   y Meta (attachments), render de imagen/video/audio/documento en el hilo.
+- Gestión de credenciales Meta en el admin (token por instancia, validación, aviso de
+  expiración a 60 días para Instagram).
 - Actualizaciones en tiempo real vía SSE (polling cada 3s, `X-Accel-Buffering: no`).
 - Nombres y fotos de contacto resueltos asincrónicamente:
   - WA → Evolution API `whatsappNumbers` (pushName) + `fetchProfile` POST (foto).
@@ -133,16 +130,15 @@ humana WhatsApp, snippets n8n, baseline de monitoreo limpio.
   - Reintentos automáticos mientras falten datos; SSE emite `event:contact` al resolverse
     para actualizar lista y conversación abierta sin recargar.
 - Dedup de mensajes en ingesta: contenido idéntico en ventana de 5s (cubre ecos Meta
-  y retries de webhook n8n). `rol:page` sin contenido + human reciente = eco de media.
+  y retries de webhook n8n).
 - Documentos bloqueados para IG/Messenger (UI + 422 server); audio bloqueado para IG.
 - Resúmenes con IA (`POST /api/summary`): conversación individual o período
   (día / 7 días / mes / trimestre) vía `gpt-5.4-mini`. AbortController cancela
   requests previas al cambiar período.
 - Búsqueda por nombre, username y número de teléfono (EXISTS subquery sobre contacts).
-- Mobile: scroll del hilo, teclado virtual (`interactiveWidget: resizes-content`),
-  safe-area-inset-bottom, flex-col en overlay, dedup SSE por ID.
+- Snippets n8n, mobile (scroll, teclado virtual, safe-area), baseline de monitoreo limpio.
 
-### Phase 3 — PENDIENTE
+### Phase 2 — PENDIENTE
 - [ ] Contador de no leídos.
 - [ ] Selector de negocio en el dashboard (hoy el admin cambia por URL).
 - [ ] Búsqueda por contenido de mensajes (hoy solo nombre/usuario/número).
@@ -150,7 +146,7 @@ humana WhatsApp, snippets n8n, baseline de monitoreo limpio.
 
 ---
 
-## Endpoints clave — nuevos en Phase 2
+## Endpoints clave — nuevos en Phase 1
 
 - `POST /api/summary` — genera resumen con gpt-5.4-mini. Body:
   `{ type: "conversation", instanciaId, uidUsuario }` o
