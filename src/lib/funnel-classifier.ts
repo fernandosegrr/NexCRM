@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
  * (salvo `force`, que usa el botón manual on-demand).
  */
 
-const OPENAI_MODEL = "gpt-5.4-mini";
+const OPENAI_MODEL = "gpt-4o-mini";
 const THROTTLE_MS = 5 * 60_000;
 
 export type ClassifyResult = {

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const OPENAI_MODEL = "gpt-5.4-mini";
+const OPENAI_MODEL = "gpt-4o-mini";
 
 const summarySchema = z.discriminatedUnion("type", [
   z.object({
