@@ -39,20 +39,22 @@ async function fetchEvolutionStatus(
     });
     clearTimeout(timer);
     if (!r.ok) return "unknown";
+    // Evolution API v2 devuelve estructura plana: { name, connectionStatus, ... }
     const all = (await r.json()) as Array<{
-      instance?: { instanceName?: string; status?: string; state?: string; connectionStatus?: string };
+      name?: string;
       connectionStatus?: string;
       state?: string;
+      instance?: { instanceName?: string; status?: string; state?: string; connectionStatus?: string };
     }>;
     const inst = all.find(
-      (i) => i.instance?.instanceName === instanciaId,
+      (i) => i.name === instanciaId || i.instance?.instanceName === instanciaId,
     );
     return (
+      inst?.connectionStatus ??
+      inst?.state ??
       inst?.instance?.state ??
       inst?.instance?.connectionStatus ??
       inst?.instance?.status ??
-      inst?.connectionStatus ??
-      inst?.state ??
       "unknown"
     );
   } catch {

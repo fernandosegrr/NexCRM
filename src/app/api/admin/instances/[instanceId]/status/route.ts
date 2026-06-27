@@ -40,23 +40,24 @@ export async function GET(
       return NextResponse.json({ status: "unknown" });
     }
 
+    // Evolution API v2 devuelve estructura plana: { name, connectionStatus, ... }
+    // versiones antiguas usaban: { instance: { instanceName, state } }
     const all = (await r.json()) as Array<{
-      instance?: { instanceName?: string; state?: string; connectionStatus?: string; status?: string };
+      name?: string;
       connectionStatus?: string;
       state?: string;
+      instance?: { instanceName?: string; state?: string; connectionStatus?: string; status?: string };
     }>;
 
-    console.log("[status] fetchInstances raw (first 3):", JSON.stringify(all.slice(0, 3), null, 2));
-
     const found = all.find(
-      (i) => i.instance?.instanceName === inst.instanciaId,
+      (i) => i.name === inst.instanciaId || i.instance?.instanceName === inst.instanciaId,
     );
     const status =
+      found?.connectionStatus ??
+      found?.state ??
       found?.instance?.state ??
       found?.instance?.connectionStatus ??
       found?.instance?.status ??
-      found?.connectionStatus ??
-      found?.state ??
       "unknown";
 
     return NextResponse.json({ status });
