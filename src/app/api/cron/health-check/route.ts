@@ -31,7 +31,7 @@ async function fetchEvolutionStatus(
   instanciaId: string,
 ): Promise<string> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 3000);
   try {
     const r = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
       headers: { apikey: EVOLUTION_API_KEY },
@@ -54,7 +54,7 @@ async function fetchEvolutionStatus(
 
 async function tryReconnect(instanciaId: string): Promise<void> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 3000);
   try {
     await fetch(
       `${EVOLUTION_API_URL}/instance/connect/${encodeURIComponent(instanciaId)}`,
@@ -182,8 +182,8 @@ async function processInstance(inst: {
   if (connectionStatus !== "open") {
     accion = "reconexion_intentada";
     await tryReconnect(instanciaId);
-    // Esperar 10 segundos
-    await new Promise((r) => setTimeout(r, 10_000));
+    // Esperar 5 segundos (cron-job.org tiene timeout de 30s)
+    await new Promise((r) => setTimeout(r, 5_000));
     reconnectStatus = await fetchEvolutionStatus(instanciaId);
 
     if (reconnectStatus === "open") {
