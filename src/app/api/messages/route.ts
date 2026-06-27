@@ -36,6 +36,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const ingestToken = process.env.MESSAGES_INGEST_TOKEN;
+  if (ingestToken) {
+    const auth = req.headers.get("authorization");
+    if (auth !== `Bearer ${ingestToken}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   let body: unknown;
   try {
     body = await req.json();
