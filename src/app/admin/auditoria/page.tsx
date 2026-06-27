@@ -84,59 +84,110 @@ export default async function AuditoriaPage({
           No hay registros de auditoría.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-40">Timestamp</TableHead>
-                <TableHead>Instancia</TableHead>
-                <TableHead className="w-28">Canal</TableHead>
-                <TableHead>UID</TableHead>
-                <TableHead className="w-16">Rol</TableHead>
-                <TableHead className="w-24">Status</TableHead>
-                <TableHead>Detalle</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {fullDateTime(log.timestamp.toISOString())}
-                  </TableCell>
-                  <TableCell className="max-w-[140px] truncate font-mono text-xs">
-                    {log.instanciaId}
-                  </TableCell>
-                  <TableCell>
-                    {log.canal && isCanal(log.canal) ? (
-                      <ChannelBadge canal={log.canal} size="xs" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">{log.canal ?? "—"}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-[120px] truncate text-xs">
-                    {log.uidUsuario ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">{log.rol ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant={log.status === "ok" ? "success" : "destructive"} className="text-[10px]">
-                      {log.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell
-                    className="max-w-[240px] truncate text-xs text-muted-foreground"
-                    title={log.errorDetail ?? undefined}
+        <>
+          {/* Cards — mobile */}
+          <div className="space-y-2 sm:hidden">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className="rounded-lg border border-border bg-card p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Badge
+                    variant={log.status === "ok" ? "success" : "destructive"}
+                    className="text-[10px]"
                   >
+                    {log.status}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {log.rol ?? "—"}
+                  </span>
+                  {log.canal && isCanal(log.canal) ? (
+                    <ChannelBadge canal={log.canal} size="xs" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{log.canal ?? "—"}</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {fullDateTime(log.timestamp.toISOString())}
+                </p>
+                <p className="truncate font-mono text-xs text-foreground">
+                  {log.instanciaId}
+                </p>
+                {log.uidUsuario && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    UID: {log.uidUsuario}
+                  </p>
+                )}
+                {(log.errorDetail || log.messageId) && (
+                  <p className="truncate text-xs text-muted-foreground">
                     {log.errorDetail
-                      ? log.errorDetail.slice(0, 80) + (log.errorDetail.length > 80 ? "…" : "")
-                      : log.messageId
-                        ? `msg: ${log.messageId}`
-                        : "—"}
-                  </TableCell>
+                      ? log.errorDetail.slice(0, 100) + (log.errorDetail.length > 100 ? "…" : "")
+                      : `msg: ${log.messageId}`}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Tabla — sm+ */}
+          <div className="hidden overflow-hidden rounded-lg border border-border sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-40">Timestamp</TableHead>
+                  <TableHead>Instancia</TableHead>
+                  <TableHead className="w-28">Canal</TableHead>
+                  <TableHead className="hidden md:table-cell">UID</TableHead>
+                  <TableHead className="w-16">Rol</TableHead>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Detalle</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {fullDateTime(log.timestamp.toISOString())}
+                    </TableCell>
+                    <TableCell className="max-w-[140px] truncate font-mono text-xs">
+                      {log.instanciaId}
+                    </TableCell>
+                    <TableCell>
+                      {log.canal && isCanal(log.canal) ? (
+                        <ChannelBadge canal={log.canal} size="xs" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{log.canal ?? "—"}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden max-w-[120px] truncate text-xs md:table-cell">
+                      {log.uidUsuario ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">{log.rol ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={log.status === "ok" ? "success" : "destructive"}
+                        className="text-[10px]"
+                      >
+                        {log.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell
+                      className="hidden max-w-[200px] truncate text-xs text-muted-foreground lg:table-cell"
+                      title={log.errorDetail ?? undefined}
+                    >
+                      {log.errorDetail
+                        ? log.errorDetail.slice(0, 80) + (log.errorDetail.length > 80 ? "…" : "")
+                        : log.messageId
+                          ? `msg: ${log.messageId}`
+                          : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
     </div>
   );

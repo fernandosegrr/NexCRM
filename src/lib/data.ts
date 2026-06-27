@@ -58,31 +58,50 @@ function serializeMessage(m: {
 
 // ── Negocios ────────────────────────────────────────────────────────────
 export async function getBusinessesWithStats() {
-  const businesses = await prisma.business.findMany({
-    orderBy: { creadoAt: "desc" },
-    include: {
-      instancias: { orderBy: { creadoAt: "asc" } },
-      _count: { select: { mensajes: true, usuarios: true } },
-    },
-  });
+  const [businesses, activityRows] = await Promise.all([
+    prisma.business.findMany({
+      orderBy: { creadoAt: "desc" },
+      include: {
+        instancias: { orderBy: { creadoAt: "asc" } },
+        _count: { select: { mensajes: true, usuarios: true } },
+      },
+    }),
+    prisma.$queryRaw<{ businessId: string; lastAt: Date | null; mesActual: number }[]>(
+      Prisma.sql`
+        SELECT
+          "businessId",
+          max("enviadoAt") AS "lastAt",
+          count(*) FILTER (WHERE "enviadoAt" >= date_trunc('month', now()))::int AS "mesActual"
+        FROM messages
+        GROUP BY "businessId"
+      `,
+    ),
+  ]);
 
-  return businesses.map((b) => ({
-    id: b.id,
-    nombre: b.nombre,
-    canales: b.canales,
-    activo: b.activo,
-    plan: b.plan,
-    tablaMemoria: b.tablaMemoria,
-    creadoAt: b.creadoAt.toISOString(),
-    instancias: b.instancias.map((i) => ({
-      id: i.id,
-      canal: i.canal,
-      instanciaId: i.instanciaId,
-      activo: i.activo,
-    })),
-    totalMensajes: b._count.mensajes,
-    totalUsuarios: b._count.usuarios,
-  }));
+  const activityMap = new Map(activityRows.map((r) => [r.businessId, r]));
+
+  return businesses.map((b) => {
+    const activity = activityMap.get(b.id);
+    return {
+      id: b.id,
+      nombre: b.nombre,
+      canales: b.canales,
+      activo: b.activo,
+      plan: b.plan,
+      tablaMemoria: b.tablaMemoria,
+      creadoAt: b.creadoAt.toISOString(),
+      instancias: b.instancias.map((i) => ({
+        id: i.id,
+        canal: i.canal,
+        instanciaId: i.instanciaId,
+        activo: i.activo,
+      })),
+      totalMensajes: b._count.mensajes,
+      totalUsuarios: b._count.usuarios,
+      lastMensajeAt: activity?.lastAt ? new Date(activity.lastAt).toISOString() : null,
+      mensajesMes: activity?.mesActual ?? 0,
+    };
+  });
 }
 
 export type BusinessCard = Awaited<
@@ -103,6 +122,8 @@ export async function getBusinessById(id: string) {
     nombre: b.nombre,
     canales: b.canales,
     activo: b.activo,
+    plan: b.plan,
+    tablaMemoria: b.tablaMemoria,
     creadoAt: b.creadoAt.toISOString(),
     instancias: b.instancias.map((i) => ({
       id: i.id,
@@ -436,4 +457,202 @@ export async function instanceBelongsToBusiness(
     select: { id: true },
   });
   return !!inst;
+}
+
+// ── Métricas de negocio ──────────────────────────────────────────────────
+
+type MensajesPorDiaRow = { fecha: Date; user: number; bot: number };
+type HorasPicoRow = { hora: number; total: number };
+type DistribucionCanalRow = { canal: string; total: number };
+
+export type MensajesPorDia = { fecha: string; user: number; bot: number };
+export type HoraPico = { hora: number; total: number };
+export type DistribucionCanal = { canal: string; total: number };
+
+export type BusinessMetrics = {
+  mensajesPorDia: MensajesPorDia[];
+  horasPico: HoraPico[];
+  distribucionCanal: DistribucionCanal[];
+};
+
+export async function getBusinessMetrics(
+  businessId: string,
+  days = 14,
+): Promise<BusinessMetrics> {
+  const [porDia, pico, canales] = await Promise.all([
+    prisma.$queryRaw<MensajesPorDiaRow[]>(Prisma.sql`
+      SELECT
+        date_trunc('day', "enviadoAt")::date AS fecha,
+        count(*) FILTER (WHERE rol = 'user')::int AS "user",
+        count(*) FILTER (WHERE rol IN ('bot', 'page'))::int AS bot
+      FROM messages
+      WHERE "businessId" = ${businessId}
+        AND "enviadoAt" >= now() - ${days}::int * interval '1 day'
+      GROUP BY 1
+      ORDER BY 1
+    `),
+    prisma.$queryRaw<HorasPicoRow[]>(Prisma.sql`
+      SELECT
+        extract(hour FROM "enviadoAt")::int AS hora,
+        count(*)::int AS total
+      FROM messages
+      WHERE "businessId" = ${businessId}
+        AND "enviadoAt" >= now() - 30 * interval '1 day'
+      GROUP BY 1
+      ORDER BY 1
+    `),
+    prisma.$queryRaw<DistribucionCanalRow[]>(Prisma.sql`
+      SELECT canal, count(*)::int AS total
+      FROM messages
+      WHERE "businessId" = ${businessId}
+      GROUP BY canal
+    `),
+  ]);
+
+  return {
+    mensajesPorDia: porDia.map((r) => ({
+      fecha: new Date(r.fecha).toISOString().slice(0, 10),
+      user: Number(r.user),
+      bot: Number(r.bot),
+    })),
+    horasPico: pico.map((r) => ({ hora: Number(r.hora), total: Number(r.total) })),
+    distribucionCanal: canales.map((r) => ({ canal: r.canal, total: Number(r.total) })),
+  };
+}
+
+// ── Estadísticas del embudo ──────────────────────────────────────────────
+
+type EmbudoStatsRow = {
+  stageId: string;
+  nombre: string;
+  color: string;
+  totalContactos: number;
+  autoEnviados: number;
+  manuales: number;
+};
+
+export type EmbudoStatItem = {
+  stageId: string;
+  nombre: string;
+  color: string;
+  totalContactos: number;
+  autoEnviados: number;
+  manuales: number;
+};
+
+export async function getEmbudoStats(businessId: string): Promise<EmbudoStatItem[]> {
+  const rows = await prisma.$queryRaw<EmbudoStatsRow[]>(Prisma.sql`
+    SELECT
+      fs.id AS "stageId",
+      fs.nombre,
+      fs.color,
+      count(DISTINCT cs."contactId")::int AS "totalContactos",
+      coalesce(fl.auto_count, 0) AS "autoEnviados",
+      coalesce(fl.manual_count, 0) AS "manuales"
+    FROM funnel_stages fs
+    LEFT JOIN contact_stages cs ON cs."stageId" = fs.id
+    LEFT JOIN (
+      SELECT
+        "stageId",
+        count(*) FILTER (WHERE decision = 'enviado')::int AS auto_count,
+        count(*) FILTER (WHERE decision = 'omitido')::int AS manual_count
+      FROM follow_up_logs
+      WHERE "businessId" = ${businessId}
+      GROUP BY "stageId"
+    ) fl ON fl."stageId" = fs.id
+    WHERE fs."businessId" = ${businessId}
+    GROUP BY fs.id, fs.nombre, fs.color, fs.orden, fl.auto_count, fl.manual_count
+    ORDER BY fs.orden
+  `);
+
+  return rows.map((r) => ({
+    stageId: r.stageId,
+    nombre: r.nombre,
+    color: r.color,
+    totalContactos: Number(r.totalContactos),
+    autoEnviados: Number(r.autoEnviados),
+    manuales: Number(r.manuales),
+  }));
+}
+
+// ── Métricas globales (admin dashboard) ─────────────────────────────────
+
+type GlobalMsgDayRow = { fecha: Date; user: number; bot: number };
+type GlobalActivityRow = {
+  id: string;
+  nombre: string;
+  mensajes7d: number;
+  ultimoMensaje: Date | null;
+};
+
+export type GlobalStats = {
+  totalNegocios: number;
+  mensajesHoy: number;
+  mensajesAyer: number;
+  mensajesPorDia: { fecha: string; user: number; bot: number }[];
+  negociosPorActividad: {
+    id: string;
+    nombre: string;
+    mensajes7d: number;
+    ultimoMensaje: string | null;
+  }[];
+};
+
+export async function getGlobalStats(days = 14): Promise<GlobalStats> {
+  const [totalNegocios, hoy, ayer, porDia, actividad] = await Promise.all([
+    prisma.business.count({ where: { activo: true } }),
+    prisma.message.count({
+      where: { enviadoAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+    }),
+    prisma.message.count({
+      where: {
+        enviadoAt: {
+          gte: new Date(new Date().setHours(0, 0, 0, 0) - 86400000),
+          lt: new Date(new Date().setHours(0, 0, 0, 0)),
+        },
+      },
+    }),
+    prisma.$queryRaw<GlobalMsgDayRow[]>(Prisma.sql`
+      SELECT
+        date_trunc('day', "enviadoAt")::date AS fecha,
+        count(*) FILTER (WHERE rol = 'user')::int AS "user",
+        count(*) FILTER (WHERE rol IN ('bot', 'page'))::int AS bot
+      FROM messages
+      WHERE "enviadoAt" >= now() - ${days}::int * interval '1 day'
+      GROUP BY 1
+      ORDER BY 1
+    `),
+    prisma.$queryRaw<GlobalActivityRow[]>(Prisma.sql`
+      SELECT
+        b.id,
+        b.nombre,
+        count(m.id) FILTER (
+          WHERE m."enviadoAt" >= now() - 7 * interval '1 day'
+        )::int AS "mensajes7d",
+        max(m."enviadoAt") AS "ultimoMensaje"
+      FROM businesses b
+      LEFT JOIN messages m ON m."businessId" = b.id
+      GROUP BY b.id, b.nombre
+      ORDER BY "mensajes7d" DESC
+    `),
+  ]);
+
+  return {
+    totalNegocios,
+    mensajesHoy: hoy,
+    mensajesAyer: ayer,
+    mensajesPorDia: porDia.map((r) => ({
+      fecha: new Date(r.fecha).toISOString().slice(0, 10),
+      user: Number(r.user),
+      bot: Number(r.bot),
+    })),
+    negociosPorActividad: actividad.map((r) => ({
+      id: r.id,
+      nombre: r.nombre,
+      mensajes7d: Number(r.mensajes7d),
+      ultimoMensaje: r.ultimoMensaje
+        ? new Date(r.ultimoMensaje).toISOString()
+        : null,
+    })),
+  };
 }

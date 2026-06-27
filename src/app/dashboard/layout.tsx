@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Filter } from "lucide-react";
+import { BarChart2, Filter } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -39,14 +39,24 @@ export default async function DashboardLayout({
         </div>
         <div className="flex-1" />
         {session.user.businessId && (
-          <Link
-            href="/dashboard/embudo"
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Configurar embudo de ventas"
-          >
-            <Filter className="size-4" />
-            <span className="hidden sm:inline">Embudo</span>
-          </Link>
+          <>
+            <Link
+              href="/dashboard/embudo"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Configurar embudo de ventas"
+            >
+              <Filter className="size-4" />
+              <span className="hidden sm:inline">Embudo</span>
+            </Link>
+            <Link
+              href="/dashboard/reportes"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Reportes y métricas"
+            >
+              <BarChart2 className="size-4" />
+              <span className="hidden sm:inline">Reportes</span>
+            </Link>
+          </>
         )}
         <UserMenu nombre={session.user.nombre} email={session.user.email} />
       </header>

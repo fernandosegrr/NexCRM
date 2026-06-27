@@ -1,19 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Bot, MessageSquare, Users } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { getBusinessById } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
 import { buildN8nSnippets, buildN8nPrompt } from "@/lib/n8n-snippets";
-import { isCanal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { ChannelBadge } from "@/components/channel-badge";
-import { CopyButton } from "@/components/copy-button";
-import { DownloadButton } from "@/components/download-button";
-import { MetaTokenForm, type MetaTokenStatus } from "@/components/admin/meta-token-form";
-import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
+import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
+import { BusinessDetailTabs } from "@/components/admin/business/business-detail-tabs";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -27,79 +23,12 @@ export async function generateMetadata({
   return { title: business?.nombre ?? "Negocio" };
 }
 
-function Stat({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: typeof Bot;
-  value: number;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Icon className="size-[18px]" />
-      </div>
-      <div>
-        <p className="text-lg font-semibold leading-none">
-          {value.toLocaleString("es-MX")}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-function SnippetBlock({
-  title,
-  rol,
-  code,
-  filename,
-  deprecated,
-}: {
-  title: string;
-  rol: "user" | "bot" | "human" | "page";
-  code: string;
-  filename: string;
-  deprecated?: boolean;
-}) {
-  const badgeVariant =
-    rol === "bot"
-      ? "default"
-      : rol === "human"
-        ? "success"
-        : rol === "page"
-          ? "secondary"
-          : "muted";
-  return (
-    <div className={cn("overflow-hidden rounded-lg border border-border bg-background/50", deprecated && "opacity-60")}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <Badge variant={badgeVariant}>{rol}</Badge>
-          <span className="text-sm font-medium">{title}</span>
-          {deprecated && (
-            <Badge variant="muted" className="text-[10px]">Deprecado</Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <CopyButton value={code} />
-          <DownloadButton value={code} filename={filename} label=".json" />
-        </div>
-      </div>
-      <pre className="max-h-72 overflow-auto p-4 text-xs leading-relaxed text-muted-foreground">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
-
 export default async function BusinessDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const [business, funnelStages, businessPlanData] = await Promise.all([
+  const [business, funnelStages, businessPlanData, clienteUser] = await Promise.all([
     getBusinessById(params.id),
     prisma.funnelStage.findMany({
       where: { businessId: params.id },
@@ -123,8 +52,16 @@ export default async function BusinessDetailPage({
         },
       },
     }),
-    prisma.business.findUnique({ where: { id: params.id }, select: { plan: true } }),
+    prisma.business.findUnique({
+      where: { id: params.id },
+      select: { plan: true },
+    }),
+    prisma.user.findFirst({
+      where: { businessId: params.id, rol: "CLIENTE" },
+      select: { id: true, nombre: true, email: true, activo: true },
+    }),
   ]);
+
   if (!business) notFound();
 
   const appUrl =
@@ -152,7 +89,8 @@ export default async function BusinessDetailPage({
     : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Header */}
       <div>
         <Link
           href="/admin/negocios"
@@ -162,17 +100,33 @@ export default async function BusinessDetailPage({
         </Link>
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight truncate">
               {business.nombre}
             </h1>
-            <Badge variant={business.activo ? "success" : "muted"}>
+            {businessPlanData?.plan === "pro" ? (
+              <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-500">
+                PRO
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                BÁSICO
+              </span>
+            )}
+            <Badge variant={business.activo ? "success" : "muted"} className="shrink-0">
               {business.activo ? "Activo" : "Inactivo"}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Creado el {shortDate(business.creadoAt)}
-          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <p className="text-sm text-muted-foreground">
+              Creado el {shortDate(business.creadoAt)}
+            </p>
+            <EditBusinessDrawer
+              businessId={business.id}
+              initialPlan={businessPlanData?.plan ?? "basico"}
+              initialTablaMemoria={business.tablaMemoria}
+            />
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -182,183 +136,17 @@ export default async function BusinessDetailPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat icon={MessageSquare} value={business.totalMensajes} label="Mensajes" />
-        <Stat icon={Bot} value={business.instancias.length} label="Instancias" />
-        <Stat icon={Users} value={business.totalUsuarios} label="Usuarios" />
-      </div>
-
-      {/* ── Credenciales Meta ── */}
-      {igMsgInstances.length > 0 && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Credenciales Meta</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Page Access Token por instancia. Necesario para enviar mensajes
-              desde el CRM hacia Instagram DM y Messenger. El Page ID se detecta
-              automáticamente al verificar el token.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {igMsgInstances.map((i) => {
-              const status: MetaTokenStatus = {
-                hasToken: i.metaHasToken,
-                pageId: i.metaPageId ?? null,
-                setAt: i.metaTokenSetAt,
-                expiresAt: i.metaTokenExpiresAt,
-              };
-              return (
-                <div
-                  key={i.id}
-                  className="rounded-xl border border-border bg-card p-4 sm:p-5"
-                >
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <ChannelBadge canal={isCanal(i.canal) ? i.canal : "instagram"} />
-                    <code className="rounded bg-muted px-2 py-1 text-xs">
-                      {i.instanciaId}
-                    </code>
-                  </div>
-                  <MetaTokenForm
-                    instanceId={i.id}
-                    canal={i.canal}
-                    initialStatus={status}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ── Embudo de ventas ── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Embudo de ventas</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Define las etapas del funnel para este negocio. Arrastra para reordenar.
-          </p>
-        </div>
-        <FunnelStageManager
-          businessId={business.id}
-          businessPlan={businessPlanData?.plan ?? "basico"}
-          initialStages={funnelStages}
-        />
-      </section>
-
-      {/* ── Integración n8n ── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Integración n8n</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Copia estos nodos{" "}
-            <span className="font-medium text-foreground">HTTP Request</span> en
-            tu flujo de n8n. Apuntan a{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-              {appUrl}/api/messages
-            </code>{" "}
-            y usan <code className="text-xs">onError: continueRegularOutput</code>{" "}
-            para no romper el flujo del bot.
-          </p>
-        </div>
-
-        {llmPrompt && (
-          <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Prompt para agente IA</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Pégalo en un LLM junto con el JSON de tu flujo n8n. El agente sabrá
-                exactamente dónde conectar cada nodo según los canales de este negocio.
-              </p>
-            </div>
-            <CopyButton
-              value={llmPrompt}
-              label="Copiar prompt"
-              copiedLabel="Copiado"
-              className="shrink-0"
-            />
-          </div>
-        )}
-
-        {business.instancias.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-card/30 px-4 py-8 text-center text-sm text-muted-foreground">
-            Este negocio no tiene instancias registradas.
-          </p>
-        ) : (
-          <div className="space-y-6">
-            {/* ── WhatsApp ── */}
-            {waSnippets && (
-              <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <ChannelBadge canal="whatsapp" />
-                  {waInstances.map((i) => (
-                    <code key={i.id} className="rounded bg-muted px-2 py-1 text-xs">
-                      {i.instanciaId}
-                    </code>
-                  ))}
-                </div>
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <SnippetBlock
-                    title="Inicio (usuario)"
-                    rol="user"
-                    code={waSnippets.inicio}
-                    filename="crm-whatsapp-inicio.json"
-                  />
-                  <SnippetBlock
-                    title="Respuesta humana (fromMe=true)"
-                    rol="human"
-                    code={waSnippets.humanReply}
-                    filename="crm-whatsapp-human-reply.json"
-                  />
-                  <SnippetBlock
-                    title="Respuesta del bot (fin)"
-                    rol="bot"
-                    code={waSnippets.fin}
-                    filename="crm-whatsapp-fin.json"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ── Instagram + Messenger (mismo formato Meta) ── */}
-            {igMsgSnippets && (
-              <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {igMsgInstances.map((i) => (
-                    <ChannelBadge key={i.id} canal={isCanal(i.canal) ? i.canal : "instagram"} />
-                  ))}
-                  {igMsgInstances.map((i) => (
-                    <code key={i.id} className="rounded bg-muted px-2 py-1 text-xs">
-                      {i.instanciaId}
-                    </code>
-                  ))}
-                </div>
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <SnippetBlock
-                    title="Inicio (usuario — is_echo=false)"
-                    rol="user"
-                    code={igMsgSnippets.inicio}
-                    filename="crm-ig-messenger-inicio.json"
-                  />
-                  <SnippetBlock
-                    title="Echo de página (is_echo=true)"
-                    rol="page"
-                    code={igMsgSnippets.humanReply}
-                    filename="crm-ig-messenger-echo.json"
-                  />
-                  <SnippetBlock
-                    title="Respuesta del bot (fin)"
-                    rol="bot"
-                    code={igMsgSnippets.fin}
-                    filename="crm-ig-messenger-fin.json"
-                    deprecated
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* Tabs */}
+      <BusinessDetailTabs
+        business={business}
+        funnelStages={funnelStages}
+        businessPlan={businessPlanData?.plan ?? "basico"}
+        waSnippets={waSnippets}
+        igMsgSnippets={igMsgSnippets}
+        llmPrompt={llmPrompt}
+        appUrl={appUrl}
+        clienteUser={clienteUser}
+      />
     </div>
   );
 }

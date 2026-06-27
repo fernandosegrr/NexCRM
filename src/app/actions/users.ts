@@ -114,3 +114,20 @@ export async function setUserActivo(
     return { ok: false, error: "No se pudo actualizar el usuario." };
   }
 }
+
+export async function resetUserPassword(
+  id: string,
+  newPassword: string,
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "No autorizado." };
+  if (!newPassword || newPassword.length < 6) {
+    return { ok: false, error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+  try {
+    const hash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id }, data: { password: hash } });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo cambiar la contraseña." };
+  }
+}

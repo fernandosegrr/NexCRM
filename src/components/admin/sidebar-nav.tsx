@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ClipboardList,
+  LayoutDashboard,
   MessageSquare,
   Store,
   Users,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
 export const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/negocios", label: "Negocios", icon: Store },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/mensajes", label: "Mensajes", icon: MessageSquare },
@@ -36,7 +38,9 @@ export function SidebarNav({
     <nav className="flex flex-col gap-1 px-3">
       {ADMIN_NAV.map((item) => {
         const active =
-          pathname === item.href || pathname.startsWith(item.href + "/");
+          item.href === "/admin"
+            ? pathname === "/admin"
+            : pathname === item.href || pathname.startsWith(item.href + "/");
         const Icon = item.icon;
         return (
           <Link

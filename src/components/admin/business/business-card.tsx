@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Bot, ChevronRight, MessageSquare } from "lucide-react";
+import { ChevronRight, MessageSquare } from "lucide-react";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { toast } from "sonner";
 
 import { setBusinessActivo } from "@/app/actions/businesses";
@@ -30,6 +32,9 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
     });
   }
 
+  const waInstance = business.instancias.find((i) => i.canal === "whatsapp");
+  const waActivo = waInstance?.activo ?? false;
+
   return (
     <Card
       className={cn(
@@ -42,12 +47,27 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="font-semibold leading-tight truncate">{business.nombre}</h3>
             {business.plan === "pro" ? (
-              <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-500">PRO</span>
+              <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-500">
+                PRO
+              </span>
             ) : (
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">BÁSICO</span>
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                BÁSICO
+              </span>
             )}
           </div>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+          <div className="flex shrink-0 items-center gap-2">
+            {waInstance && (
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  waActivo ? "bg-emerald-400" : "bg-red-500",
+                )}
+                title={waActivo ? "WA activa" : "WA inactiva"}
+              />
+            )}
+            <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -63,13 +83,17 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <MessageSquare className="size-4" />
-            {business.totalMensajes.toLocaleString("es-MX")} mensajes
+            {business.mensajesMes.toLocaleString("es-MX")} este mes
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Bot className="size-4" />
-            {business.instancias.length}{" "}
-            {business.instancias.length === 1 ? "instancia" : "instancias"}
-          </span>
+          {business.lastMensajeAt && (
+            <span className="text-xs">
+              Último:{" "}
+              {formatDistanceToNow(parseISO(business.lastMensajeAt), {
+                addSuffix: true,
+                locale: es,
+              })}
+            </span>
+          )}
         </div>
       </Link>
 
