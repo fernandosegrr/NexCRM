@@ -40,12 +40,12 @@ async function fetchEvolutionStatus(
     clearTimeout(timer);
     if (!r.ok) return "unknown";
     const all = (await r.json()) as Array<{
-      instance?: { instanceName?: string; state?: string };
+      instance?: { instanceName?: string; status?: string; state?: string };
     }>;
     const inst = all.find(
       (i) => i.instance?.instanceName === instanciaId,
     );
-    return inst?.instance?.state ?? "unknown";
+    return inst?.instance?.status ?? inst?.instance?.state ?? "unknown";
   } catch {
     clearTimeout(timer);
     return "unknown";
