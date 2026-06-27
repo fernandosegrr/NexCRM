@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { n8nPool } from "@/lib/n8n";
+import { sendEmail, buildSuggestionHtml } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ export const maxDuration = 60;
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
+const APP_URL =
+  process.env.APP_URL ??
+  process.env.NEXTAUTH_URL ??
+  "https://postgres-nexcrm.d6cr6o.easypanel.host";
 
 type ProcessResult = {
   contactId: string;
@@ -98,7 +103,7 @@ async function insertBotMemory(
 }
 
 async function processContact(params: {
-  contact: { id: string; uidUsuario: string; instanciaId: string; canal: string };
+  contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null };
   stage: { id: string; nombre: string; mensajeSeguimiento: string | null };
   business: { id: string; nombre: string; tablaMemoria: string | null; etapas: { id: string; nombre: string; descripcion: string | null }[] };
   config: { modoEnvio: string; tiempoInactividad: number; maxEnviosPorDia: number; maxEnviosTotal: number | null };
@@ -242,9 +247,36 @@ Enviar=false cuando:
     const mensajeEnviado = stage.mensajeSeguimiento ?? "";
 
     if (config.modoEnvio === "manual") {
-      await prisma.followUpLog.create({
+      const log = await prisma.followUpLog.create({
         data: { ...logBase, decision: "omitido", razonIA: aiResponse.razon, mensajeEnviado, etapaDetectada: aiResponse.etapaDetectada, aprobado: null },
+        select: { id: true },
       });
+      try {
+        const clienteUser = await prisma.user.findFirst({
+          where: { businessId: business.id, rol: "CLIENTE", activo: true },
+          select: { email: true },
+        });
+        if (clienteUser?.email) {
+          const contactName = contact.nombre ?? contact.uidUsuario;
+          await sendEmail({
+            to: clienteUser.email,
+            subject: `💬 Seguimiento sugerido — ${contactName} · ${business.nombre}`,
+            html: buildSuggestionHtml({
+              businessNombre: business.nombre,
+              stageName: stage.nombre,
+              contactName,
+              canal: contact.canal,
+              minutesSinRespuesta: Math.round(minutesSinceLast),
+              razonIA: aiResponse.razon,
+              mensajeEnviado,
+              logId: log.id,
+              appUrl: APP_URL,
+            }),
+          });
+        }
+      } catch {
+        // skip silencioso — no romper el flujo si el email falla
+      }
       return { contactId: contact.id, decision: "omitido", razonIA: aiResponse.razon, etapaDetectada: aiResponse.etapaDetectada };
     }
 
@@ -368,7 +400,7 @@ export async function GET(req: NextRequest) {
             contactos: {
               select: {
                 contact: {
-                  select: { id: true, uidUsuario: true, instanciaId: true, canal: true },
+                  select: { id: true, uidUsuario: true, instanciaId: true, canal: true, nombre: true },
                 },
               },
             },
@@ -379,7 +411,7 @@ export async function GET(req: NextRequest) {
 
     // Flattened list of all (contact, stage, business, config) tuples
     type WorkItem = {
-      contact: { id: string; uidUsuario: string; instanciaId: string; canal: string };
+      contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null };
       stage: { id: string; nombre: string; mensajeSeguimiento: string | null };
       business: { id: string; nombre: string; tablaMemoria: string | null; etapas: { id: string; nombre: string; descripcion: string | null }[] };
       config: { modoEnvio: string; tiempoInactividad: number; maxEnviosPorDia: number; maxEnviosTotal: number | null };
