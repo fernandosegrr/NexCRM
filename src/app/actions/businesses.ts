@@ -155,6 +155,27 @@ export async function setBusinessActivo(
   }
 }
 
+export async function updateBusiness(
+  id: string,
+  data: { plan: "basico" | "pro"; tablaMemoria?: string | null },
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "No autorizado." };
+  try {
+    await prisma.business.update({
+      where: { id },
+      data: {
+        plan: data.plan,
+        tablaMemoria: data.tablaMemoria?.trim() || null,
+      },
+    });
+    revalidatePath("/admin/negocios");
+    revalidatePath(`/admin/negocios/${id}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo actualizar el negocio." };
+  }
+}
+
 // ── Funnel stages ────────────────────────────────────────────────────────
 
 export type FunnelStageInput = {

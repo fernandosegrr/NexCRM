@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { setBusinessActivo } from "@/app/actions/businesses";
 import { ChannelBadge } from "@/components/channel-badge";
+import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { BusinessCard as BusinessCardData } from "@/lib/data";
@@ -81,12 +82,19 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
         >
           {activo ? "Activo" : "Inactivo"}
         </span>
-        <Switch
-          checked={activo}
-          onCheckedChange={onToggle}
-          disabled={pending}
-          aria-label="Activar o desactivar negocio"
-        />
+        <div className="flex items-center gap-2">
+          <EditBusinessDrawer
+            businessId={business.id}
+            initialPlan={business.plan}
+            initialTablaMemoria={business.tablaMemoria}
+          />
+          <Switch
+            checked={activo}
+            onCheckedChange={onToggle}
+            disabled={pending}
+            aria-label="Activar o desactivar negocio"
+          />
+        </div>
       </div>
     </Card>
   );

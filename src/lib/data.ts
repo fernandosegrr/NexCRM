@@ -72,6 +72,7 @@ export async function getBusinessesWithStats() {
     canales: b.canales,
     activo: b.activo,
     plan: b.plan,
+    tablaMemoria: b.tablaMemoria,
     creadoAt: b.creadoAt.toISOString(),
     instancias: b.instancias.map((i) => ({
       id: i.id,

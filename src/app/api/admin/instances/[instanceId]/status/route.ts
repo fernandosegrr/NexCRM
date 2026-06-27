@@ -41,13 +41,23 @@ export async function GET(
     }
 
     const all = (await r.json()) as Array<{
-      instance?: { instanceName?: string; state?: string };
+      instance?: { instanceName?: string; state?: string; connectionStatus?: string; status?: string };
+      connectionStatus?: string;
+      state?: string;
     }>;
+
+    console.log("[status] fetchInstances raw (first 3):", JSON.stringify(all.slice(0, 3), null, 2));
 
     const found = all.find(
       (i) => i.instance?.instanceName === inst.instanciaId,
     );
-    const status = found?.instance?.state ?? "unknown";
+    const status =
+      found?.instance?.state ??
+      found?.instance?.connectionStatus ??
+      found?.instance?.status ??
+      found?.connectionStatus ??
+      found?.state ??
+      "unknown";
 
     return NextResponse.json({ status });
   } catch {
