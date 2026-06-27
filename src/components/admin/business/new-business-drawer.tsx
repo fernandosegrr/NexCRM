@@ -12,6 +12,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -30,12 +37,14 @@ export function NewBusinessDrawer({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [plan, setPlan] = useState("basico");
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [ids, setIds] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
 
   function reset() {
     setNombre("");
+    setPlan("basico");
     setSel({});
     setIds({});
   }
@@ -60,7 +69,7 @@ export function NewBusinessDrawer({
     }
 
     start(async () => {
-      const r = await createBusiness({ nombre: nombre.trim(), instancias });
+      const r = await createBusiness({ nombre: nombre.trim(), instancias, plan: plan as "basico" | "pro" });
       if (r.ok) {
         toast.success("Negocio creado correctamente.");
         setOpen(false);
@@ -104,6 +113,19 @@ export function NewBusinessDrawer({
               placeholder="Tacos El Güero"
               autoFocus
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="plan">Plan</Label>
+            <Select value={plan} onValueChange={setPlan}>
+              <SelectTrigger id="plan">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="basico">Básico</SelectItem>
+                <SelectItem value="pro">Pro</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-3">

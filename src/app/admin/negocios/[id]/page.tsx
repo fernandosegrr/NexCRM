@@ -99,13 +99,31 @@ export default async function BusinessDetailPage({
 }: {
   params: { id: string };
 }) {
-  const [business, funnelStages] = await Promise.all([
+  const [business, funnelStages, businessPlanData] = await Promise.all([
     getBusinessById(params.id),
     prisma.funnelStage.findMany({
       where: { businessId: params.id },
       orderBy: { orden: "asc" },
-      select: { id: true, businessId: true, nombre: true, orden: true, color: true, descripcion: true, mensajeSeguimiento: true },
+      select: {
+        id: true,
+        businessId: true,
+        nombre: true,
+        orden: true,
+        color: true,
+        descripcion: true,
+        mensajeSeguimiento: true,
+        followUpConfig: {
+          select: {
+            activo: true,
+            modoEnvio: true,
+            tiempoInactividad: true,
+            maxEnviosPorDia: true,
+            maxEnviosTotal: true,
+          },
+        },
+      },
     }),
+    prisma.business.findUnique({ where: { id: params.id }, select: { plan: true } }),
   ]);
   if (!business) notFound();
 
@@ -221,7 +239,11 @@ export default async function BusinessDetailPage({
             Define las etapas del funnel para este negocio. Arrastra para reordenar.
           </p>
         </div>
-        <FunnelStageManager businessId={business.id} initialStages={funnelStages} />
+        <FunnelStageManager
+          businessId={business.id}
+          businessPlan={businessPlanData?.plan ?? "basico"}
+          initialStages={funnelStages}
+        />
       </section>
 
       {/* ── Integración n8n ── */}

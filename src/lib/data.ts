@@ -71,6 +71,7 @@ export async function getBusinessesWithStats() {
     nombre: b.nombre,
     canales: b.canales,
     activo: b.activo,
+    plan: b.plan,
     creadoAt: b.creadoAt.toISOString(),
     instancias: b.instancias.map((i) => ({
       id: i.id,
@@ -405,6 +406,14 @@ export async function getRecentIncidents(limit = 50): Promise<IncidentLogEntry[]
 }
 
 // ── Funnel stages ────────────────────────────────────────────────────────
+export type FollowUpConfigDTO = {
+  activo: boolean;
+  modoEnvio: string;
+  tiempoInactividad: number;
+  maxEnviosPorDia: number;
+  maxEnviosTotal: number | null;
+};
+
 export type FunnelStageDTO = {
   id: string;
   businessId: string;
@@ -413,6 +422,7 @@ export type FunnelStageDTO = {
   color: string;
   descripcion: string | null;
   mensajeSeguimiento: string | null;
+  followUpConfig?: FollowUpConfigDTO | null;
 };
 
 /** Verifica que una instancia pertenece a un negocio (autorización cliente). */

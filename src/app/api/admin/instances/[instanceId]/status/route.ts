@@ -47,7 +47,7 @@ export async function GET(
     const found = all.find(
       (i) => i.instance?.instanceName === inst.instanciaId,
     );
-    const status = found?.instance?.status ?? found?.instance?.state ?? "unknown";
+    const status = found?.instance?.state ?? "unknown";
 
     return NextResponse.json({ status });
   } catch {

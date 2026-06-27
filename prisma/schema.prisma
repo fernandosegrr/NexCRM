@@ -17,15 +17,17 @@ enum Role {
 }
 
 model Business {
-  id         String             @id @default(uuid())
-  nombre     String
-  canales    String[] // ['whatsapp','instagram','messenger']
-  activo     Boolean            @default(true)
-  creadoAt   DateTime           @default(now())
-  instancias BusinessInstance[]
-  usuarios   User[]
-  mensajes   Message[]
-  etapas     FunnelStage[]
+  id           String             @id @default(uuid())
+  nombre       String
+  canales      String[] // ['whatsapp','instagram','messenger']
+  activo       Boolean            @default(true)
+  creadoAt     DateTime           @default(now())
+  plan         String             @default("basico") // 'basico' | 'pro'
+  tablaMemoria String?
+  instancias   BusinessInstance[]
+  usuarios     User[]
+  mensajes     Message[]
+  etapas       FunnelStage[]
 
   @@map("businesses")
 }
@@ -117,9 +119,10 @@ model Contact {
 
   // Sugerencia de etapa generada por IA (clasificador del embudo)
   sugerenciaStageId String?
-  sugerenciaStage   FunnelStage? @relation("sugerencia", fields: [sugerenciaStageId], references: [id], onDelete: SetNull)
+  sugerenciaStage   FunnelStage?  @relation("sugerencia", fields: [sugerenciaStageId], references: [id], onDelete: SetNull)
   sugerenciaRazon   String?
   clasificadoAt     DateTime? // marca de última clasificación (throttle)
+  followUpLogs      FollowUpLog[]
 
   @@unique([instanciaId, uidUsuario])
   @@index([sugerenciaStageId])
@@ -145,17 +148,18 @@ model IncidentLog {
 }
 
 model FunnelStage {
-  id                 String         @id @default(uuid())
+  id                 String          @id @default(uuid())
   businessId         String
-  business           Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business           Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nombre             String
   orden              Int
-  color              String         @default("#6366F1")
+  color              String          @default("#6366F1")
   descripcion        String? // qué representa esta etapa (lo usa el clasificador IA)
   mensajeSeguimiento String?
-  creadoAt           DateTime       @default(now())
+  creadoAt           DateTime        @default(now())
   contactos          ContactStage[]
-  sugeridoA          Contact[]      @relation("sugerencia")
+  sugeridoA          Contact[]       @relation("sugerencia")
+  followUpConfig     FollowUpConfig?
 
   @@index([businessId])
   @@map("funnel_stages")
@@ -172,4 +176,41 @@ model ContactStage {
 
   @@unique([contactId, businessId])
   @@map("contact_stages")
+}
+
+model FollowUpConfig {
+  id                String      @id @default(uuid())
+  stageId           String      @unique
+  stage             FunnelStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  activo            Boolean     @default(false)
+  modoEnvio         String      @default("manual") // 'automatico' | 'manual'
+  tiempoInactividad Int         @default(120) // minutos
+  maxEnviosPorDia   Int         @default(1)
+  maxEnviosTotal    Int?        @default(3) // null = sin límite
+  creadoAt          DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@map("follow_up_configs")
+}
+
+model FollowUpLog {
+  id             String   @id @default(uuid())
+  contactId      String
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  stageId        String
+  businessId     String
+  canal          String
+  uidUsuario     String
+  instanciaId    String
+  decision       String // 'enviado'|'omitido'|'ventana_cerrada'|'limite_alcanzado'|'ia_descarto'|'error'
+  razonIA        String?
+  mensajeEnviado String?
+  etapaDetectada String?
+  aprobado       Boolean?
+  creadoAt       DateTime @default(now())
+
+  @@index([contactId])
+  @@index([businessId])
+  @@index([creadoAt(sort: Desc)])
+  @@map("follow_up_logs")
 }

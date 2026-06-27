@@ -93,13 +93,14 @@ export async function createBusiness(
     };
   }
 
-  const { nombre, instancias } = parsed.data;
+  const { nombre, plan, instancias } = parsed.data;
   const canales = Array.from(new Set(instancias.map((i) => i.canal)));
 
   try {
     const business = await prisma.business.create({
       data: {
         nombre,
+        plan: plan ?? "basico",
         canales,
         instancias: {
           create: instancias.map((i) => ({
@@ -415,6 +416,41 @@ export async function applyStageSuggestion(
     return { ok: true };
   } catch {
     return { ok: false, error: "No se pudo aplicar la sugerencia." };
+  }
+}
+
+// ── Follow-up config ────────────────────────────────────────────────────
+
+export type FollowUpConfigInput = {
+  activo: boolean;
+  modoEnvio: string;
+  tiempoInactividad: number;
+  maxEnviosPorDia: number;
+  maxEnviosTotal: number | null;
+};
+
+export async function upsertFollowUpConfig(
+  stageId: string,
+  data: FollowUpConfigInput,
+): Promise<ActionResult> {
+  try {
+    const stage = await prisma.funnelStage.findUnique({
+      where: { id: stageId },
+      select: { businessId: true },
+    });
+    if (!stage) return { ok: false, error: "Etapa no encontrada." };
+    if (!(await requireBusinessAccess(stage.businessId)))
+      return { ok: false, error: "No autorizado." };
+
+    await prisma.followUpConfig.upsert({
+      where: { stageId },
+      create: { stageId, ...data },
+      update: data,
+    });
+    revalidateFunnelViews(stage.businessId);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo guardar la configuración." };
   }
 }
 

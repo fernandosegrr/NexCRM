@@ -38,7 +38,14 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
     >
       <Link href={`/admin/negocios/${business.id}`} className="block p-5">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold leading-tight">{business.nombre}</h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="font-semibold leading-tight truncate">{business.nombre}</h3>
+            {business.plan === "pro" ? (
+              <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-500">PRO</span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">BÁSICO</span>
+            )}
+          </div>
           <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
         </div>
 

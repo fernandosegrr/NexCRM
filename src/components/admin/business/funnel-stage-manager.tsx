@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import type { FunnelStageDTO } from "@/lib/data";
@@ -28,7 +28,9 @@ import {
   deleteFunnelStage,
   reorderFunnelStages,
   updateFunnelStage,
+  upsertFollowUpConfig,
   type FunnelStageInput,
+  type FollowUpConfigInput,
 } from "@/app/actions/businesses";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -48,6 +51,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+// ── Types ────────────────────────────────────────────────────────────────
+
+type FollowUpState = {
+  activo: boolean;
+  modoEnvio: string;
+  tiempoInactividad: number;
+  maxEnviosPorDia: number;
+  maxEnviosTotal: number | null;
+};
+
+const DEFAULT_FOLLOWUP: FollowUpState = {
+  activo: false,
+  modoEnvio: "manual",
+  tiempoInactividad: 120,
+  maxEnviosPorDia: 1,
+  maxEnviosTotal: 3,
+};
+
+function mensajePlaceholder(stageName: string): string {
+  const n = stageName.toLowerCase();
+  if (n.includes("nuevo") || n.includes("lead"))
+    return "¡Hola! Vi que nos escribiste, ¿en qué te podemos ayudar? 😊";
+  if (n.includes("interesado"))
+    return "Hola, ¿pudiste revisar la información que te compartimos?";
+  if (n.includes("negociaci"))
+    return "Hola, ¿tuviste oportunidad de revisar la cotización?";
+  if (n.includes("cerrar") || n.includes("cierre"))
+    return "¡Hola! ¿Podemos proceder? Tenemos disponibilidad esta semana 😊";
+  return "Hola, ¿pudiste revisar la información que te enviamos?";
+}
 
 // ── Stage form dialog ────────────────────────────────────────────────────
 
@@ -55,19 +90,26 @@ function StageDialog({
   open,
   onOpenChange,
   initial,
+  initialFollowUp,
+  businessPlan,
   onSave,
   saving,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial: FunnelStageInput;
-  onSave: (input: FunnelStageInput) => void;
+  initialFollowUp?: FollowUpState | null;
+  businessPlan: string;
+  onSave: (input: FunnelStageInput, followUp: FollowUpState | null) => void;
   saving: boolean;
 }) {
   const [nombre, setNombre] = useState(initial.nombre);
   const [color, setColor] = useState(initial.color);
   const [descripcion, setDescripcion] = useState(initial.descripcion ?? "");
   const [mensaje, setMensaje] = useState(initial.mensajeSeguimiento ?? "");
+  const [followUp, setFollowUp] = useState<FollowUpState>(
+    initialFollowUp ?? DEFAULT_FOLLOWUP,
+  );
 
   // Sync when dialog reopens with new initial values
   const [prevOpen, setPrevOpen] = useState(open);
@@ -78,16 +120,27 @@ function StageDialog({
       setColor(initial.color);
       setDescripcion(initial.descripcion ?? "");
       setMensaje(initial.mensajeSeguimiento ?? "");
+      setFollowUp(initialFollowUp ?? DEFAULT_FOLLOWUP);
     }
+  }
+
+  const isPro = businessPlan === "pro";
+
+  function handleMaxEnviosTotal(val: string) {
+    setFollowUp((f) => ({
+      ...f,
+      maxEnviosTotal: val === "null" ? null : Number(val),
+    }));
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial.nombre ? "Editar etapa" : "Nueva etapa"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* Nombre */}
           <div className="space-y-1.5">
             <Label htmlFor="stage-nombre">Nombre</Label>
             <Input
@@ -98,6 +151,8 @@ function StageDialog({
               autoFocus
             />
           </div>
+
+          {/* Color */}
           <div className="space-y-1.5">
             <Label htmlFor="stage-color">Color</Label>
             <div className="flex items-center gap-3">
@@ -111,6 +166,8 @@ function StageDialog({
               <code className="text-sm text-muted-foreground">{color}</code>
             </div>
           </div>
+
+          {/* Descripción */}
           <div className="space-y-1.5">
             <Label htmlFor="stage-desc">Descripción (para la IA)</Label>
             <Textarea
@@ -124,32 +181,152 @@ function StageDialog({
               El clasificador de IA usa esta descripción para decidir si un contacto entra a esta etapa.
             </p>
           </div>
+
+          {/* Mensaje de seguimiento */}
           <div className="space-y-1.5">
             <Label htmlFor="stage-msg">Mensaje de seguimiento</Label>
             <Textarea
               id="stage-msg"
               value={mensaje}
               onChange={(e) => setMensaje(e.target.value)}
-              placeholder="Hola {nombre}, ¿pudiste revisar la información que te enviamos?"
+              placeholder={mensajePlaceholder(nombre)}
               rows={2}
             />
             <p className="text-[11px] text-muted-foreground">
-              Opcional. Se enviará cuando un lead lleve tiempo sin responder en esta etapa.
+              El mensaje se enviará tal cual. Evita mencionar que es automático.
             </p>
           </div>
+
+          {/* ── Seguimiento automático ─────────────────────────────── */}
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-medium">Seguimiento automático</Label>
+              {isPro ? (
+                <Switch
+                  checked={followUp.activo}
+                  onCheckedChange={(v) => setFollowUp((f) => ({ ...f, activo: v }))}
+                />
+              ) : (
+                <div
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                  title="Disponible en plan Pro"
+                >
+                  <Lock className="size-3.5" />
+                  <span>Plan Pro</span>
+                </div>
+              )}
+            </div>
+
+            {!isPro && (
+              <p className="text-[11px] text-muted-foreground">
+                Disponible en plan Pro. Activa el seguimiento automático para esta etapa.
+              </p>
+            )}
+
+            {isPro && followUp.activo && (
+              <div className="space-y-3 pt-1">
+                {/* Warning si falta mensajeSeguimiento */}
+                {!mensaje.trim() && (
+                  <p className="text-[11px] text-amber-500">
+                    ⚠️ Define un mensaje de seguimiento en la etapa para activar el envío automático.
+                  </p>
+                )}
+
+                {/* Modo de envío */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Modo de envío</Label>
+                  <Select
+                    value={followUp.modoEnvio}
+                    onValueChange={(v) => setFollowUp((f) => ({ ...f, modoEnvio: v }))}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="automatico">⚡ Automático — la IA envía sin confirmación</SelectItem>
+                      <SelectItem value="manual">👁 Sugerencia — la IA sugiere, yo apruebo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Tiempo de inactividad */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tiempo de inactividad</Label>
+                  <Select
+                    value={String(followUp.tiempoInactividad)}
+                    onValueChange={(v) => setFollowUp((f) => ({ ...f, tiempoInactividad: Number(v) }))}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 minutos</SelectItem>
+                      <SelectItem value="60">1 hora</SelectItem>
+                      <SelectItem value="120">2 horas</SelectItem>
+                      <SelectItem value="240">4 horas</SelectItem>
+                      <SelectItem value="480">8 horas</SelectItem>
+                      <SelectItem value="1440">24 horas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Límites */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Límite diario</Label>
+                    <Select
+                      value={String(followUp.maxEnviosPorDia)}
+                      onValueChange={(v) => setFollowUp((f) => ({ ...f, maxEnviosPorDia: Number(v) }))}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 por día</SelectItem>
+                        <SelectItem value="2">2 por día</SelectItem>
+                        <SelectItem value="3">3 por día</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Límite total</Label>
+                    <Select
+                      value={followUp.maxEnviosTotal === null ? "null" : String(followUp.maxEnviosTotal)}
+                      onValueChange={handleMaxEnviosTotal}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 en total</SelectItem>
+                        <SelectItem value="2">2 en total</SelectItem>
+                        <SelectItem value="3">3 en total</SelectItem>
+                        <SelectItem value="5">5 en total</SelectItem>
+                        <SelectItem value="null">Sin límite</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
           <Button
             onClick={() =>
-              onSave({
-                nombre: nombre.trim(),
-                color,
-                descripcion: descripcion.trim() || null,
-                mensajeSeguimiento: mensaje.trim() || null,
-              })
+              onSave(
+                {
+                  nombre: nombre.trim(),
+                  color,
+                  descripcion: descripcion.trim() || null,
+                  mensajeSeguimiento: mensaje.trim() || null,
+                },
+                isPro ? followUp : null,
+              )
             }
             disabled={saving || !nombre.trim()}
           >
@@ -204,6 +381,11 @@ function SortableStageRow({
           {stage.mensajeSeguimiento}
         </span>
       )}
+      {stage.followUpConfig?.activo && (
+        <span className="hidden shrink-0 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-500 sm:block">
+          Auto
+        </span>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -235,14 +417,15 @@ const EMPTY_STAGE: FunnelStageInput = {
   mensajeSeguimiento: null,
 };
 
-// Centinela para "dejar sin etapa" en el select de reasignación al borrar.
 const NONE_OPTION = "__none__";
 
 export function FunnelStageManager({
   businessId,
+  businessPlan,
   initialStages,
 }: {
   businessId: string;
+  businessPlan: string;
   initialStages: FunnelStageDTO[];
 }) {
   const [stages, setStages] = useState<FunnelStageDTO[]>(initialStages);
@@ -291,39 +474,48 @@ export function FunnelStageManager({
     setDialogOpen(true);
   }
 
-  function handleSave(input: FunnelStageInput) {
+  function handleSave(input: FunnelStageInput, followUp: FollowUpState | null) {
     startTransition(async () => {
       if (editingStage) {
         const r = await updateFunnelStage(editingStage.id, input);
-        if (r.ok) {
-          setStages((prev) =>
-            prev.map((s) =>
-              s.id === editingStage.id ? { ...s, ...input } : s,
-            ),
-          );
-          toast.success("Etapa actualizada.");
-          setDialogOpen(false);
-        } else {
+        if (!r.ok) {
           toast.error(r.error ?? "Error al actualizar.");
+          return;
         }
+        if (followUp) {
+          await upsertFollowUpConfig(editingStage.id, followUp as FollowUpConfigInput);
+        }
+        setStages((prev) =>
+          prev.map((s) =>
+            s.id === editingStage.id
+              ? { ...s, ...input, followUpConfig: followUp ?? s.followUpConfig }
+              : s,
+          ),
+        );
+        toast.success("Etapa actualizada.");
+        setDialogOpen(false);
       } else {
         const r = await createFunnelStage(businessId, input);
-        if (r.ok && r.id) {
-          const newStage: FunnelStageDTO = {
-            id: r.id,
-            businessId,
-            nombre: input.nombre,
-            color: input.color,
-            descripcion: input.descripcion ?? null,
-            mensajeSeguimiento: input.mensajeSeguimiento ?? null,
-            orden: stages.length + 1,
-          };
-          setStages((prev) => [...prev, newStage]);
-          toast.success("Etapa creada.");
-          setDialogOpen(false);
-        } else {
+        if (!r.ok || !r.id) {
           toast.error(r.error ?? "Error al crear.");
+          return;
         }
+        if (followUp) {
+          await upsertFollowUpConfig(r.id, followUp as FollowUpConfigInput);
+        }
+        const newStage: FunnelStageDTO = {
+          id: r.id,
+          businessId,
+          nombre: input.nombre,
+          color: input.color,
+          descripcion: input.descripcion ?? null,
+          mensajeSeguimiento: input.mensajeSeguimiento ?? null,
+          orden: stages.length + 1,
+          followUpConfig: followUp ?? null,
+        };
+        setStages((prev) => [...prev, newStage]);
+        toast.success("Etapa creada.");
+        setDialogOpen(false);
       }
     });
   }
@@ -332,7 +524,6 @@ export function FunnelStageManager({
     setDeleteTarget(stage);
     setMoveToId(NONE_OPTION);
     setDeleteCount(null);
-    // Cuántos contactos hay en esta etapa (para decidir si pedir reasignación)
     void countContactsInStage(stage.id).then(setDeleteCount);
   }
 
@@ -351,6 +542,8 @@ export function FunnelStageManager({
       }
     });
   }
+
+  const editingFollowUp = editingStage?.followUpConfig ?? null;
 
   return (
     <div className="space-y-3">
@@ -396,6 +589,8 @@ export function FunnelStageManager({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         initial={editingStage ?? EMPTY_STAGE}
+        initialFollowUp={editingFollowUp}
+        businessPlan={businessPlan}
         onSave={handleSave}
         saving={pending}
       />

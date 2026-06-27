@@ -17,6 +17,7 @@ export const instanciaSchema = z.object({
 
 export const createBusinessSchema = z.object({
   nombre: z.string().trim().min(2, "El nombre es muy corto"),
+  plan: z.enum(["basico", "pro"]).default("basico"),
   instancias: z
     .array(instanciaSchema)
     .min(1, "Selecciona al menos un canal y pega su ID de instancia"),

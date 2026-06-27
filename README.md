@@ -155,6 +155,19 @@ docker compose up --build
 
 ---
 
+## Crons requeridos
+
+Configura estos trabajos en **cron-job.org** (u otro servicio), con el header `Authorization: Bearer {CRON_SECRET}`:
+
+| # | Ruta | Frecuencia | Descripción |
+|---|---|---|---|
+| 1 | `GET /api/cron/health-check` | Cada 5 minutos | Monitor de salud y auto-recuperación de bots caídos |
+| 2 | `GET /api/cron/follow-up` | Cada 15 minutos | Motor de seguimiento automático inteligente por etapa (solo negocios plan Pro) |
+
+La variable `CRON_SECRET` debe definirse en `.env` y en EasyPanel. Si no se define, el endpoint responde con 401 a cualquier solicitud.
+
+---
+
 ## Notas
 
 - Todo el texto de la UI está en **español mexicano**.

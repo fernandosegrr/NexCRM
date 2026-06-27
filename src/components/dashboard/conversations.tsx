@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Check,
+  ChevronDown,
+  ChevronUp,
   LayoutGrid,
   List,
   MessagesSquare,
@@ -9,7 +12,9 @@ import {
   Search,
   Users,
   WifiOff,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import type { FunnelStageDTO, MessageDTO } from "@/lib/data";
 
 const CANALES = [
@@ -33,6 +38,21 @@ import { PeriodSummaryButton } from "./summary-modal";
 
 const PAGE = 25;
 const VIEW_MODE_KEY = "crm-view-mode";
+
+type FollowUpSuggestion = {
+  id: string;
+  contact: { id: string; nombre: string | null; username: string | null; fotoPerfil: string | null };
+  stageId: string;
+  stageName: string | null;
+  stageColor: string | null;
+  mensajeEnviado: string | null;
+  razonIA: string | null;
+  canal: string;
+  uidUsuario: string;
+  instanciaId: string;
+  creadoAt: string;
+  horasSinRespuesta: number;
+};
 
 function ListSkeleton({ rows = 7 }: { rows?: number }) {
   return (
@@ -112,6 +132,8 @@ export function Conversations() {
   const [reloadKey, setReloadKey] = useState(0);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [stages, setStages] = useState<FunnelStageDTO[]>([]);
+  const [suggestions, setSuggestions] = useState<FollowUpSuggestion[]>([]);
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listSseRef = useRef<EventSource | null>(null);
 
@@ -165,13 +187,17 @@ export function Conversations() {
     };
   }, [debounced, canal, reloadKey]);
 
-  // Fetch funnel stages once we know the businessId
+  // Fetch funnel stages + pending suggestions once we know the businessId
   useEffect(() => {
     const businessId = contacts[0]?.businessId;
     if (!businessId) return;
     fetch(`/api/funnel-stages?businessId=${encodeURIComponent(businessId)}`)
       .then((r) => r.json())
       .then((d: { stages?: FunnelStageDTO[] }) => setStages(d.stages ?? []))
+      .catch(() => {});
+    fetch(`/api/follow-up/pending?businessId=${encodeURIComponent(businessId)}`)
+      .then((r) => r.json())
+      .then((d: { suggestions?: FollowUpSuggestion[] }) => setSuggestions(d.suggestions ?? []))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts[0]?.businessId]);
@@ -351,6 +377,33 @@ export function Conversations() {
     );
   }
 
+  async function handleSuggestionSend(id: string) {
+    const r = await fetch("/api/follow-up/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ followUpLogId: id }),
+    });
+    if (r.ok) {
+      setSuggestions((prev) => prev.filter((s) => s.id !== id));
+      toast.success("Mensaje enviado correctamente.");
+    } else {
+      toast.error("No se pudo enviar el mensaje.");
+    }
+  }
+
+  async function handleSuggestionDiscard(id: string) {
+    const r = await fetch("/api/follow-up/approve", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ followUpLogId: id }),
+    });
+    if (r.ok) {
+      setSuggestions((prev) => prev.filter((s) => s.id !== id));
+    } else {
+      toast.error("No se pudo descartar la sugerencia.");
+    }
+  }
+
   // En vista kanban cargamos todos los contactos (sin scroll infinito visible)
   useEffect(() => {
     if (viewMode === "kanban" && !loading && !loadingMore && hasMore) {
@@ -476,6 +529,70 @@ export function Conversations() {
             ))}
           </div>
         </div>
+
+        {/* Panel de sugerencias pendientes */}
+        {suggestions.length > 0 && (
+          <div className="border-b border-border">
+            <button
+              onClick={() => setSuggestionsExpanded((v) => !v)}
+              className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-violet-500 hover:bg-accent/40"
+            >
+              <span>✨ {suggestions.length} sugerencia{suggestions.length > 1 ? "s" : ""} de seguimiento pendiente{suggestions.length > 1 ? "s" : ""}</span>
+              {suggestionsExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            </button>
+            {suggestionsExpanded && (
+              <div className="space-y-2 px-2 pb-2">
+                {suggestions.map((s) => (
+                  <div key={s.id} className="rounded-lg border border-border bg-card p-2.5 text-xs space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-7 w-7 shrink-0">
+                        {s.contact.fotoPerfil && <AvatarImage src={s.contact.fotoPerfil} alt={s.contact.nombre ?? s.uidUsuario} />}
+                        <AvatarFallback className={avatarColor(s.uidUsuario)}>
+                          {initialOf(s.contact.nombre ?? s.contact.username ?? s.uidUsuario)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <span className="truncate font-medium">{s.contact.nombre ?? s.contact.username ?? s.uidUsuario}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <ChannelBadge canal={s.canal} size="xs" />
+                          {s.stageName && s.stageColor && (
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                              style={{ backgroundColor: s.stageColor + "22", color: s.stageColor }}
+                            >
+                              {s.stageName}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground">Sin respuesta hace {s.horasSinRespuesta}h</span>
+                        </div>
+                      </div>
+                    </div>
+                    {s.razonIA && (
+                      <p className="text-muted-foreground text-[11px]">IA: {s.razonIA}</p>
+                    )}
+                    {s.mensajeEnviado && (
+                      <p className="rounded bg-muted px-2 py-1 text-[11px] leading-relaxed">{s.mensajeEnviado}</p>
+                    )}
+                    <div className="flex gap-1.5 pt-0.5">
+                      <button
+                        onClick={() => void handleSuggestionSend(s.id)}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/10 py-1 text-[11px] font-medium text-emerald-500 hover:bg-emerald-500/20"
+                      >
+                        <Check className="size-3" /> Enviar
+                      </button>
+                      <button
+                        onClick={() => void handleSuggestionDiscard(s.id)}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-md bg-muted py-1 text-[11px] font-medium text-muted-foreground hover:bg-accent"
+                      >
+                        <X className="size-3" /> Descartar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (

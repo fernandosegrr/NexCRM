@@ -23,19 +23,31 @@ export default async function DashboardFunnelPage() {
   }
 
   const businessId = session.user.businessId;
-  const stages = await prisma.funnelStage.findMany({
-    where: { businessId },
-    orderBy: { orden: "asc" },
-    select: {
-      id: true,
-      businessId: true,
-      nombre: true,
-      orden: true,
-      color: true,
-      descripcion: true,
-      mensajeSeguimiento: true,
-    },
-  });
+  const [business, stages] = await Promise.all([
+    prisma.business.findUnique({ where: { id: businessId }, select: { plan: true } }),
+    prisma.funnelStage.findMany({
+      where: { businessId },
+      orderBy: { orden: "asc" },
+      select: {
+        id: true,
+        businessId: true,
+        nombre: true,
+        orden: true,
+        color: true,
+        descripcion: true,
+        mensajeSeguimiento: true,
+        followUpConfig: {
+          select: {
+            activo: true,
+            modoEnvio: true,
+            tiempoInactividad: true,
+            maxEnviosPorDia: true,
+            maxEnviosTotal: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6 overflow-y-auto p-4 sm:p-6">
@@ -53,7 +65,11 @@ export default async function DashboardFunnelPage() {
         </p>
       </div>
 
-      <FunnelStageManager businessId={businessId} initialStages={stages} />
+      <FunnelStageManager
+        businessId={businessId}
+        businessPlan={business?.plan ?? "basico"}
+        initialStages={stages}
+      />
     </div>
   );
 }
