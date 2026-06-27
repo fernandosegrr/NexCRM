@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, MessageSquare, Store, Users, type LucideIcon } from "lucide-react";
+import {
+  ClipboardList,
+  MessageSquare,
+  Store,
+  Users,
+  Wifi,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -13,9 +20,16 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/mensajes", label: "Mensajes", icon: MessageSquare },
   { href: "/admin/auditoria", label: "Auditoría", icon: ClipboardList },
+  { href: "/admin/estado", label: "Estado", icon: Wifi },
 ];
 
-export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarNav({
+  onNavigate,
+  incidentCount = 0,
+}: {
+  onNavigate?: () => void;
+  incidentCount?: number;
+}) {
   const pathname = usePathname();
 
   return (
@@ -38,6 +52,11 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           >
             <Icon className="size-[18px]" />
             {item.label}
+            {item.href === "/admin/estado" && incidentCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {incidentCount > 99 ? "99+" : incidentCount}
+              </span>
+            )}
           </Link>
         );
       })}

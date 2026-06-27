@@ -2,9 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, FileText, MessageSquare, RotateCw, WifiOff } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  FileText,
+  Loader2,
+  MessageSquare,
+  RotateCw,
+  Sparkles,
+  WifiOff,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import type { ConversationContact, MessageDTO } from "@/lib/data";
+import { applyStageSuggestion, dismissStageSuggestion } from "@/app/actions/businesses";
 import { avatarColor, dayLabel, initialOf, timeOnly } from "@/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -14,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { BotToggle } from "./bot-toggle";
 import { ReplyInput } from "./reply-input";
 import { ConversationSummaryButton } from "./summary-modal";
+import { StageSelector } from "./stage-selector";
 
 function MessageMedia({
   tipoMedia,
@@ -91,13 +104,103 @@ function MessagesSkeleton() {
 export function ConversationView({
   contact,
   onBack,
+  onStageChange,
 }: {
   contact: ConversationContact;
   onBack: () => void;
+  onStageChange?: (change: {
+    stageId: string | null;
+    nombre: string | null;
+    color: string | null;
+  }) => void;
 }) {
   const [messages, setMessages] = useState<MessageDTO[] | null>(null);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
+
+  // Sugerencia de etapa (IA). El componente se remonta por contacto (key),
+  // así que el estado inicial desde `contact` es siempre el correcto.
+  const [sug, setSug] = useState<
+    { stageId: string; nombre: string | null; color: string | null; razon: string | null } | null
+  >(
+    contact.sugerenciaStageId
+      ? {
+          stageId: contact.sugerenciaStageId,
+          nombre: contact.sugerenciaNombre,
+          color: contact.sugerenciaColor,
+          razon: contact.sugerenciaRazon,
+        }
+      : null,
+  );
+  const [sugBusy, setSugBusy] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+
+  async function applySug() {
+    if (!sug || !contact.businessId) return;
+    const applied = sug;
+    setSugBusy(true);
+    const r = await applyStageSuggestion(
+      contact.instanciaId,
+      contact.uidUsuario,
+      contact.canal,
+      contact.businessId,
+    );
+    setSugBusy(false);
+    if (r.ok) {
+      setSug(null);
+      onStageChange?.({ stageId: applied.stageId, nombre: applied.nombre, color: applied.color });
+      toast.success(`Movido a "${applied.nombre}"`);
+    } else {
+      toast.error(r.error ?? "No se pudo aplicar la sugerencia.");
+    }
+  }
+
+  async function dismissSug() {
+    if (!contact.businessId) return;
+    setSugBusy(true);
+    const r = await dismissStageSuggestion(
+      contact.instanciaId,
+      contact.uidUsuario,
+      contact.businessId,
+    );
+    setSugBusy(false);
+    if (r.ok) setSug(null);
+    else toast.error(r.error ?? "No se pudo descartar.");
+  }
+
+  async function runClassify() {
+    setClassifying(true);
+    try {
+      const res = await fetch("/api/funnel/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instanciaId: contact.instanciaId,
+          uidUsuario: contact.uidUsuario,
+        }),
+      });
+      if (!res.ok) {
+        toast.error("No se pudo clasificar con IA.");
+        return;
+      }
+      const d = await res.json();
+      if (d.suggestion) {
+        setSug({
+          stageId: d.suggestion.stageId,
+          nombre: d.suggestion.stageNombre,
+          color: d.suggestion.stageColor,
+          razon: d.suggestion.razon,
+        });
+        toast.success(`La IA sugiere: ${d.suggestion.stageNombre}`);
+      } else {
+        toast.info("La IA no sugirió un cambio de etapa.");
+      }
+    } catch {
+      toast.error("No se pudo clasificar con IA.");
+    } finally {
+      setClassifying(false);
+    }
+  }
 
   function handleReplySent(msg: {
     id: string;
@@ -222,11 +325,76 @@ export function ConversationView({
           instanciaId={contact.instanciaId}
           uidUsuario={contact.uidUsuario}
         />
+        {contact.businessId && (
+          <>
+            <StageSelector
+              instanciaId={contact.instanciaId}
+              uidUsuario={contact.uidUsuario}
+              canal={contact.canal}
+              businessId={contact.businessId}
+              currentStageId={contact.stageId ?? null}
+              onChanged={(change) => {
+                onStageChange?.(change);
+                setSug(null); // una asignación manual supersede la sugerencia
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              onClick={runClassify}
+              disabled={classifying}
+              title="Clasificar etapa con IA"
+            >
+              {classifying ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Sparkles className="size-4" />
+              )}
+            </Button>
+          </>
+        )}
         <BotToggle
           instanciaId={contact.instanciaId}
           uidUsuario={contact.uidUsuario}
         />
       </div>
+
+      {/* Franja de sugerencia de IA */}
+      {sug && (
+        <div className="flex items-center gap-2 border-b border-border bg-primary/5 px-3 py-2 sm:px-4">
+          <Sparkles className="size-3.5 shrink-0 text-primary" />
+          <p className="min-w-0 flex-1 truncate text-xs">
+            <span className="text-muted-foreground">IA sugiere mover a </span>
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span
+                className="inline-block h-2 w-2 rounded-full align-middle"
+                style={{ backgroundColor: sug.color ?? "#888" }}
+              />
+              {sug.nombre}
+            </span>
+            {sug.razon && <span className="text-muted-foreground"> · {sug.razon}</span>}
+          </p>
+          <Button
+            size="sm"
+            className="h-7 shrink-0 px-2 text-xs"
+            onClick={applySug}
+            disabled={sugBusy}
+          >
+            <Check className="mr-1 size-3" /> Aplicar
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 shrink-0 px-2 text-xs"
+            onClick={dismissSug}
+            disabled={sugBusy}
+            aria-label="Descartar sugerencia"
+          >
+            <X className="size-3" />
+          </Button>
+        </div>
+      )}
 
       {/* Mensajes */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-6">

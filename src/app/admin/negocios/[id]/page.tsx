@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Bot, MessageSquare, Users } from "lucide-react";
 
 import { getBusinessById } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 import { buildN8nSnippets, buildN8nPrompt } from "@/lib/n8n-snippets";
 import { isCanal } from "@/lib/channels";
 import { shortDate } from "@/lib/format";
@@ -12,6 +13,7 @@ import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadButton } from "@/components/download-button";
 import { MetaTokenForm, type MetaTokenStatus } from "@/components/admin/meta-token-form";
+import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -97,7 +99,14 @@ export default async function BusinessDetailPage({
 }: {
   params: { id: string };
 }) {
-  const business = await getBusinessById(params.id);
+  const [business, funnelStages] = await Promise.all([
+    getBusinessById(params.id),
+    prisma.funnelStage.findMany({
+      where: { businessId: params.id },
+      orderBy: { orden: "asc" },
+      select: { id: true, businessId: true, nombre: true, orden: true, color: true, descripcion: true, mensajeSeguimiento: true },
+    }),
+  ]);
   if (!business) notFound();
 
   const appUrl =
@@ -203,6 +212,17 @@ export default async function BusinessDetailPage({
           </div>
         </section>
       )}
+
+      {/* ── Embudo de ventas ── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Embudo de ventas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Define las etapas del funnel para este negocio. Arrastra para reordenar.
+          </p>
+        </div>
+        <FunnelStageManager businessId={business.id} initialStages={funnelStages} />
+      </section>
 
       {/* ── Integración n8n ── */}
       <section className="space-y-4">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { incomingMessageSchema } from "@/lib/validations";
 import { resolveContact } from "@/lib/contact-resolver";
+import { classifyContact } from "@/lib/funnel-classifier";
 
 async function auditLog(data: {
   instanciaId: string;
@@ -142,6 +143,15 @@ export async function POST(req: NextRequest) {
         inst.canal,
         inst.metaPageAccessToken,
       );
+
+      // Clasificar el embudo con IA (fire-and-forget, con throttle interno).
+      // Nunca bloquea ni rompe la ingesta del bot.
+      void classifyContact(
+        inst.businessId,
+        d.instanciaId,
+        normalizedUid,
+        inst.canal,
+      ).catch(() => {});
     }
 
     return NextResponse.json({ id: msg.id.toString() }, { status: 201 });

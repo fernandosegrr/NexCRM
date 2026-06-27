@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessagesSquare, RotateCw, Search, Users, WifiOff } from "lucide-react";
-import type { MessageDTO } from "@/lib/data";
+import {
+  LayoutGrid,
+  List,
+  MessagesSquare,
+  RotateCw,
+  Search,
+  Users,
+  WifiOff,
+} from "lucide-react";
+import type { FunnelStageDTO, MessageDTO } from "@/lib/data";
 
 const CANALES = [
   { value: "", label: "Todos" },
@@ -20,9 +28,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
 import { ConversationView } from "./conversation-view";
+import { KanbanView } from "./kanban-view";
 import { PeriodSummaryButton } from "./summary-modal";
 
 const PAGE = 25;
+const VIEW_MODE_KEY = "crm-view-mode";
 
 function ListSkeleton({ rows = 7 }: { rows?: number }) {
   return (
@@ -51,7 +61,7 @@ function EmptyList({ search }: { search: string }) {
       </p>
       <p className="mt-1 max-w-[15rem] text-xs text-muted-foreground">
         {search
-          ? `No encontramos contactos que coincidan con “${search}”.`
+          ? `No encontramos contactos que coincidan con "${search}".`
           : "Cuando tus bots registren mensajes, tus contactos aparecerán aquí."}
       </p>
     </div>
@@ -100,8 +110,21 @@ export function Conversations() {
   const [selected, setSelected] = useState<ConversationContact | null>(null);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [stages, setStages] = useState<FunnelStageDTO[]>([]);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listSseRef = useRef<EventSource | null>(null);
+
+  // Restore view mode from localStorage (hydration-safe)
+  useEffect(() => {
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    if (saved === "kanban" || saved === "list") setViewMode(saved);
+  }, []);
+
+  function switchView(mode: "list" | "kanban") {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -141,6 +164,17 @@ export function Conversations() {
       alive = false;
     };
   }, [debounced, canal, reloadKey]);
+
+  // Fetch funnel stages once we know the businessId
+  useEffect(() => {
+    const businessId = contacts[0]?.businessId;
+    if (!businessId) return;
+    fetch(`/api/funnel-stages?businessId=${encodeURIComponent(businessId)}`)
+      .then((r) => r.json())
+      .then((d: { stages?: FunnelStageDTO[] }) => setStages(d.stages ?? []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts[0]?.businessId]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -210,6 +244,7 @@ export function Conversations() {
                   instanciaId: msg.instanciaId,
                   uidUsuario: msg.uidUsuario,
                   canal: msg.canal,
+                  businessId: msg.businessId,
                   lastContent: msg.contenido,
                   lastRol: msg.rol,
                   lastTipoMedia: msg.tipoMedia,
@@ -218,6 +253,13 @@ export function Conversations() {
                   nombre: null,
                   username: null,
                   fotoPerfil: null,
+                  stageId: null,
+                  stageNombre: null,
+                  stageColor: null,
+                  sugerenciaStageId: null,
+                  sugerenciaNombre: null,
+                  sugerenciaColor: null,
+                  sugerenciaRazon: null,
                 },
                 ...updated,
               ];
@@ -269,6 +311,116 @@ export function Conversations() {
     };
   }, [loading]);
 
+  // Handler for optimistic kanban stage change
+  function handleKanbanStageChange(cardKey: string, newStageId: string | null) {
+    const [instanciaId, uidUsuario] = cardKey.split("::");
+    const newStage = stages.find((s) => s.id === newStageId);
+    setContacts((prev) =>
+      prev.map((c) =>
+        c.instanciaId === instanciaId && c.uidUsuario === uidUsuario
+          ? {
+              ...c,
+              stageId: newStageId,
+              stageNombre: newStage?.nombre ?? null,
+              stageColor: newStage?.color ?? null,
+            }
+          : c,
+      ),
+    );
+  }
+
+  // Sync list/selected when the stage is changed from the conversation header
+  function handleSelectedStageChange(change: {
+    stageId: string | null;
+    nombre: string | null;
+    color: string | null;
+  }) {
+    setContacts((prev) =>
+      prev.map((c) =>
+        selected &&
+        c.instanciaId === selected.instanciaId &&
+        c.uidUsuario === selected.uidUsuario
+          ? { ...c, stageId: change.stageId, stageNombre: change.nombre, stageColor: change.color }
+          : c,
+      ),
+    );
+    setSelected((prev) =>
+      prev
+        ? { ...prev, stageId: change.stageId, stageNombre: change.nombre, stageColor: change.color }
+        : prev,
+    );
+  }
+
+  // En vista kanban cargamos todos los contactos (sin scroll infinito visible)
+  useEffect(() => {
+    if (viewMode === "kanban" && !loading && !loadingMore && hasMore) {
+      void loadMore();
+    }
+  }, [viewMode, loading, loadingMore, hasMore, loadMore]);
+
+  // Kanban view (full width, no conversation panel alongside)
+  if (viewMode === "kanban" && !loading && !error) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-border p-3">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nombre, usuario o número…"
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center rounded-lg border border-border p-0.5">
+            <button
+              onClick={() => switchView("list")}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label="Vista lista"
+            >
+              <List className="size-4" />
+            </button>
+            <button
+              onClick={() => switchView("kanban")}
+              className="rounded-md bg-accent p-1.5 text-foreground"
+              aria-label="Vista kanban"
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+          </div>
+          <PeriodSummaryButton />
+        </div>
+
+        {/* Kanban board */}
+        <div className="min-h-0 flex-1 overflow-hidden p-3">
+          {contacts.length === 0 ? (
+            <EmptyList search={debounced} />
+          ) : (
+            <KanbanView
+              contacts={contacts}
+              stages={stages}
+              onContactSelect={(c) => setSelected(c)}
+              onStageChange={handleKanbanStageChange}
+            />
+          )}
+        </div>
+
+        {/* Conversation overlay when a card is clicked */}
+        {selected && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-background">
+            <ConversationView
+              key={`${selected.instanciaId}::${selected.uidUsuario}`}
+              contact={selected}
+              onBack={() => setSelected(null)}
+              onStageChange={handleSelectedStageChange}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Lista de contactos */}
@@ -278,7 +430,7 @@ export function Conversations() {
           selected && "hidden md:flex",
         )}
       >
-        <div className="border-b border-border p-3 space-y-2">
+        <div className="space-y-2 border-b border-border p-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -288,6 +440,22 @@ export function Conversations() {
                 placeholder="Nombre, usuario o número…"
                 className="pl-10"
               />
+            </div>
+            <div className="flex items-center rounded-lg border border-border p-0.5">
+              <button
+                onClick={() => switchView("list")}
+                className="rounded-md bg-accent p-1.5 text-foreground"
+                aria-label="Vista lista"
+              >
+                <List className="size-4" />
+              </button>
+              <button
+                onClick={() => switchView("kanban")}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Vista kanban"
+              >
+                <LayoutGrid className="size-4" />
+              </button>
             </div>
             <PeriodSummaryButton />
           </div>
@@ -352,6 +520,21 @@ export function Conversations() {
                           <div className="mt-1 flex items-center justify-between gap-1.5">
                             <div className="flex min-w-0 items-center gap-1.5">
                               <ChannelBadge canal={c.canal} size="xs" />
+                              {c.stageNombre && c.stageColor && (
+                                <span
+                                  className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: c.stageColor + "22",
+                                    color: c.stageColor,
+                                  }}
+                                >
+                                  <span
+                                    className="h-1.5 w-1.5 rounded-full"
+                                    style={{ backgroundColor: c.stageColor }}
+                                  />
+                                  {c.stageNombre}
+                                </span>
+                              )}
                               <span className="truncate text-xs text-muted-foreground">
                                 {c.lastRol === "bot" || c.lastRol === "page"
                                   ? "Bot: "
@@ -403,6 +586,7 @@ export function Conversations() {
             key={`${selected.instanciaId}::${selected.uidUsuario}`}
             contact={selected}
             onBack={() => setSelected(null)}
+            onStageChange={handleSelectedStageChange}
           />
         ) : (
           <Placeholder />

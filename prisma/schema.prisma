@@ -25,6 +25,7 @@ model Business {
   instancias BusinessInstance[]
   usuarios   User[]
   mensajes   Message[]
+  etapas     FunnelStage[]
 
   @@map("businesses")
 }
@@ -104,15 +105,71 @@ model AuditLog {
 }
 
 model Contact {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   uidUsuario  String
   instanciaId String
   canal       String
   nombre      String?
   username    String?
   fotoPerfil  String?
-  resolvedAt  DateTime @default(now())
+  resolvedAt  DateTime       @default(now())
+  etapas      ContactStage[]
+
+  // Sugerencia de etapa generada por IA (clasificador del embudo)
+  sugerenciaStageId String?
+  sugerenciaStage   FunnelStage? @relation("sugerencia", fields: [sugerenciaStageId], references: [id], onDelete: SetNull)
+  sugerenciaRazon   String?
+  clasificadoAt     DateTime? // marca de última clasificación (throttle)
 
   @@unique([instanciaId, uidUsuario])
+  @@index([sugerenciaStageId])
   @@map("contacts")
+}
+
+model IncidentLog {
+  id               Int       @id @default(autoincrement())
+  instanciaId      String
+  nombreNegocio    String?
+  tipo             String // 'caida_detectada'|'auto-recuperada'|'intervencion_manual'
+  contactosSinResp Int
+  estadoEvolution  String?
+  accion           String?
+  resultado        String?
+  emailEnviado     Boolean   @default(false)
+  creadoAt         DateTime  @default(now())
+  resolvedAt       DateTime?
+
+  @@index([instanciaId])
+  @@index([creadoAt(sort: Desc)])
+  @@map("incident_logs")
+}
+
+model FunnelStage {
+  id                 String         @id @default(uuid())
+  businessId         String
+  business           Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombre             String
+  orden              Int
+  color              String         @default("#6366F1")
+  descripcion        String? // qué representa esta etapa (lo usa el clasificador IA)
+  mensajeSeguimiento String?
+  creadoAt           DateTime       @default(now())
+  contactos          ContactStage[]
+  sugeridoA          Contact[]      @relation("sugerencia")
+
+  @@index([businessId])
+  @@map("funnel_stages")
+}
+
+model ContactStage {
+  id         String      @id @default(uuid())
+  contactId  String
+  contact    Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  stageId    String
+  stage      FunnelStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  businessId String
+  asignadoAt DateTime    @default(now())
+
+  @@unique([contactId, businessId])
+  @@map("contact_stages")
 }

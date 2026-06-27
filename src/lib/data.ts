@@ -193,6 +193,7 @@ export type ConversationContact = {
   instanciaId: string;
   uidUsuario: string;
   canal: string;
+  businessId: string;
   lastContent: string | null;
   lastRol: string;
   lastTipoMedia: string;
@@ -201,12 +202,20 @@ export type ConversationContact = {
   nombre: string | null;
   username: string | null;
   fotoPerfil: string | null;
+  stageId: string | null;
+  stageNombre: string | null;
+  stageColor: string | null;
+  sugerenciaStageId: string | null;
+  sugerenciaNombre: string | null;
+  sugerenciaColor: string | null;
+  sugerenciaRazon: string | null;
 };
 
 type ConversationRow = {
   instanciaId: string;
   uidUsuario: string;
   canal: string;
+  businessId: string;
   lastContent: string | null;
   lastRol: string;
   lastTipoMedia: string;
@@ -215,6 +224,13 @@ type ConversationRow = {
   nombre: string | null;
   username: string | null;
   fotoPerfil: string | null;
+  stageId: string | null;
+  stageNombre: string | null;
+  stageColor: string | null;
+  sugerenciaStageId: string | null;
+  sugerenciaNombre: string | null;
+  sugerenciaColor: string | null;
+  sugerenciaRazon: string | null;
 };
 
 /**
@@ -250,17 +266,26 @@ export async function getConversations(
       t."instanciaId",
       t."uidUsuario",
       t."canal",
-      t."contenido"  AS "lastContent",
-      t."rol"        AS "lastRol",
-      t."tipoMedia"  AS "lastTipoMedia",
-      t."enviadoAt"  AS "lastAt",
-      c.cnt          AS "total",
-      ct."nombre"    AS "nombre",
-      ct."username"  AS "username",
-      ct."fotoPerfil" AS "fotoPerfil"
+      t."businessId",
+      t."contenido"   AS "lastContent",
+      t."rol"         AS "lastRol",
+      t."tipoMedia"   AS "lastTipoMedia",
+      t."enviadoAt"   AS "lastAt",
+      c.cnt           AS "total",
+      ct."nombre"     AS "nombre",
+      ct."username"   AS "username",
+      ct."fotoPerfil" AS "fotoPerfil",
+      cs."stageId"    AS "stageId",
+      fs."nombre"     AS "stageNombre",
+      fs."color"      AS "stageColor",
+      ct."sugerenciaStageId" AS "sugerenciaStageId",
+      sg."nombre"     AS "sugerenciaNombre",
+      sg."color"      AS "sugerenciaColor",
+      ct."sugerenciaRazon"   AS "sugerenciaRazon"
     FROM (
       SELECT DISTINCT ON (m."instanciaId", m."uidUsuario")
-        m."instanciaId", m."uidUsuario", m."canal", m."contenido", m."rol", m."tipoMedia", m."enviadoAt"
+        m."instanciaId", m."uidUsuario", m."canal", m."businessId",
+        m."contenido", m."rol", m."tipoMedia", m."enviadoAt"
       FROM "messages" m
       WHERE m."businessId" = ${businessId} ${searchFilter} ${canalFilter}
       ORDER BY m."instanciaId", m."uidUsuario", m."enviadoAt" DESC
@@ -274,6 +299,12 @@ export async function getConversations(
       ON c."instanciaId" = t."instanciaId" AND c."uidUsuario" = t."uidUsuario"
     LEFT JOIN "contacts" ct
       ON ct."instanciaId" = t."instanciaId" AND ct."uidUsuario" = t."uidUsuario"
+    LEFT JOIN "contact_stages" cs
+      ON cs."contactId" = ct."id" AND cs."businessId" = ${businessId}
+    LEFT JOIN "funnel_stages" fs
+      ON fs."id" = cs."stageId"
+    LEFT JOIN "funnel_stages" sg
+      ON sg."id" = ct."sugerenciaStageId"
     ORDER BY t."enviadoAt" DESC
     LIMIT ${take} OFFSET ${skip}
   `);
@@ -282,6 +313,7 @@ export async function getConversations(
     instanciaId: r.instanciaId,
     uidUsuario: r.uidUsuario,
     canal: r.canal,
+    businessId: r.businessId,
     lastContent: r.lastContent,
     lastRol: r.lastRol,
     lastTipoMedia: r.lastTipoMedia,
@@ -290,6 +322,13 @@ export async function getConversations(
     nombre: r.nombre ?? null,
     username: r.username ?? null,
     fotoPerfil: r.fotoPerfil ?? null,
+    stageId: r.stageId ?? null,
+    stageNombre: r.stageNombre ?? null,
+    stageColor: r.stageColor ?? null,
+    sugerenciaStageId: r.sugerenciaStageId ?? null,
+    sugerenciaNombre: r.sugerenciaNombre ?? null,
+    sugerenciaColor: r.sugerenciaColor ?? null,
+    sugerenciaRazon: r.sugerenciaRazon ?? null,
   }));
 }
 
@@ -306,6 +345,75 @@ export async function getConversationMessages(
   });
   return msgs.map(serializeMessage);
 }
+
+// ── Estado del sistema (monitor de salud) ───────────────────────────────
+export type InstanceStatusCard = {
+  instanceDbId: string;
+  instanciaId: string;
+  businessNombre: string;
+  businessId: string;
+  activo: boolean;
+};
+
+export async function getWhatsAppInstances(): Promise<InstanceStatusCard[]> {
+  const instances = await prisma.businessInstance.findMany({
+    where: { canal: "whatsapp" },
+    include: { business: { select: { id: true, nombre: true } } },
+    orderBy: { creadoAt: "asc" },
+  });
+  return instances.map((i) => ({
+    instanceDbId: i.id,
+    instanciaId: i.instanciaId,
+    businessNombre: i.business.nombre,
+    businessId: i.business.id,
+    activo: i.activo,
+  }));
+}
+
+export type IncidentLogEntry = {
+  id: number;
+  instanciaId: string;
+  nombreNegocio: string | null;
+  tipo: string;
+  contactosSinResp: number;
+  estadoEvolution: string | null;
+  accion: string | null;
+  resultado: string | null;
+  emailEnviado: boolean;
+  creadoAt: string;
+  resolvedAt: string | null;
+};
+
+export async function getRecentIncidents(limit = 50): Promise<IncidentLogEntry[]> {
+  const logs = await prisma.incidentLog.findMany({
+    orderBy: { creadoAt: "desc" },
+    take: limit,
+  });
+  return logs.map((l) => ({
+    id: l.id,
+    instanciaId: l.instanciaId,
+    nombreNegocio: l.nombreNegocio,
+    tipo: l.tipo,
+    contactosSinResp: l.contactosSinResp,
+    estadoEvolution: l.estadoEvolution,
+    accion: l.accion,
+    resultado: l.resultado,
+    emailEnviado: l.emailEnviado,
+    creadoAt: l.creadoAt.toISOString(),
+    resolvedAt: l.resolvedAt?.toISOString() ?? null,
+  }));
+}
+
+// ── Funnel stages ────────────────────────────────────────────────────────
+export type FunnelStageDTO = {
+  id: string;
+  businessId: string;
+  nombre: string;
+  orden: number;
+  color: string;
+  descripcion: string | null;
+  mensajeSeguimiento: string | null;
+};
 
 /** Verifica que una instancia pertenece a un negocio (autorización cliente). */
 export async function instanceBelongsToBusiness(
