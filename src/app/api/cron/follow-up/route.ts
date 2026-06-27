@@ -10,8 +10,6 @@ export const maxDuration = 60;
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 type ProcessResult = {
   contactId: string;
   decision: string;
@@ -218,6 +216,7 @@ Enviar=false cuando:
 
     let aiResponse: AIResponse;
     try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         max_tokens: 200,
