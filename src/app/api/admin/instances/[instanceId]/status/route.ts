@@ -60,8 +60,9 @@ export async function GET(
       "unknown";
 
     return NextResponse.json({ status });
-  } catch {
+  } catch (e) {
     clearTimeout(timer);
+    console.error("[status] fetchInstances error:", e instanceof Error ? e.message : e);
     return NextResponse.json({ status: "unknown" });
   }
 }

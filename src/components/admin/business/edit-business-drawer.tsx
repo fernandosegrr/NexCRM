@@ -65,7 +65,6 @@ export function EditBusinessDrawer({
           size="icon"
           className="h-7 w-7 shrink-0"
           aria-label="Editar negocio"
-          onClick={(e) => e.preventDefault()}
         >
           <Pencil className="size-3.5" />
         </Button>
