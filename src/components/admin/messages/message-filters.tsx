@@ -51,8 +51,8 @@ export function MessageFilters({
 
   return (
     <div className="sticky top-16 z-20 -mx-4 border-b border-border bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <div className="space-y-1.5 sm:w-56">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+        <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Negocio</Label>
           <Select
             value={businessId}
@@ -72,7 +72,7 @@ export function MessageFilters({
           </Select>
         </div>
 
-        <div className="space-y-1.5 sm:w-44">
+        <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Canal</Label>
           <Select value={canal} onValueChange={(v) => update({ canal: v })}>
             <SelectTrigger>
@@ -89,39 +89,40 @@ export function MessageFilters({
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Desde</Label>
-            <input
-              type="date"
-              value={from}
-              max={to || undefined}
-              onChange={(e) => update({ from: e.target.value })}
-              className={dateInputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Hasta</Label>
-            <input
-              type="date"
-              value={to}
-              min={from || undefined}
-              onChange={(e) => update({ to: e.target.value })}
-              className={dateInputClass}
-            />
-          </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Desde</Label>
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => update({ from: e.target.value })}
+            className={dateInputClass}
+          />
         </div>
 
-        {hasFilters && (
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Hasta</Label>
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => update({ to: e.target.value })}
+            className={dateInputClass}
+          />
+        </div>
+      </div>
+
+      {hasFilters && (
+        <div className="flex justify-end pt-1">
           <Button
             variant="ghost"
+            size="sm"
             onClick={() => router.push(pathname)}
-            className="sm:ml-auto"
           >
-            <X /> Limpiar
+            <X className="size-3.5" /> Limpiar
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

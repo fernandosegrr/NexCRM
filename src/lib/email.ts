@@ -458,7 +458,7 @@ export function buildSuggestionHtml({
   logId: string;
   appUrl: string;
 }): string {
-  const approveUrl = `${appUrl}/api/follow-up/approve-link?logId=${encodeURIComponent(logId)}&action=approve`;
+  const approveUrl = `${appUrl}/follow-up/approve?logId=${encodeURIComponent(logId)}`;
   const discardUrl = `${appUrl}/api/follow-up/approve-link?logId=${encodeURIComponent(logId)}&action=discard`;
 
   const canalLabel =

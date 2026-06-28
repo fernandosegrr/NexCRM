@@ -29,7 +29,15 @@ export async function GET(req: NextRequest) {
 
   if (logs.length === 0) return NextResponse.json({ suggestions: [] });
 
-  const stageIds = Array.from(new Set(logs.map((l) => l.stageId)));
+  // Deduplicar: un solo log por contactId (el más reciente ya viene primero)
+  const seenContacts = new Set<string>();
+  const deduped = logs.filter((l) => {
+    if (seenContacts.has(l.contactId)) return false;
+    seenContacts.add(l.contactId);
+    return true;
+  });
+
+  const stageIds = Array.from(new Set(deduped.map((l) => l.stageId)));
   const stages = await prisma.funnelStage.findMany({
     where: { id: { in: stageIds } },
     select: { id: true, nombre: true, color: true, mensajeSeguimiento: true },
@@ -38,7 +46,7 @@ export async function GET(req: NextRequest) {
   const stageMap = Object.fromEntries(stages.map((s) => [s.id, s]));
 
   const now = new Date();
-  const suggestions = logs.map((l) => {
+  const suggestions = deduped.map((l) => {
     const stage = stageMap[l.stageId];
     const horasSinRespuesta = Math.round((now.getTime() - l.creadoAt.getTime()) / 3600000);
     return {

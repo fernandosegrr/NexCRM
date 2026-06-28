@@ -18,7 +18,6 @@ import { hasPermission } from "@/lib/permissions";
 import { AccessDenied } from "@/components/dashboard/access-denied";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,

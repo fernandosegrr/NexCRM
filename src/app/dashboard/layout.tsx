@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BarChart2, Filter, Megaphone, Settings, Wifi } from "lucide-react";
+import { BarChart2, Filter, Megaphone, MessageSquare, Settings, Wifi } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -49,7 +49,7 @@ export default async function DashboardLayout({
         </div>
         <div className="flex-1" />
         {session.user.businessId && (
-          <>
+          <div className="hidden items-center gap-1 sm:flex">
             {hasPermission(session.user, "ver_embudo") && (
               <Link
                 href="/dashboard/embudo"
@@ -57,7 +57,7 @@ export default async function DashboardLayout({
                 title="Configurar embudo de ventas"
               >
                 <Filter className="size-4" />
-                <span className="hidden sm:inline">Embudo</span>
+                <span>Embudo</span>
               </Link>
             )}
             {hasPermission(session.user, "ver_reportes") && (
@@ -67,7 +67,7 @@ export default async function DashboardLayout({
                 title="Reportes y métricas"
               >
                 <BarChart2 className="size-4" />
-                <span className="hidden sm:inline">Reportes</span>
+                <span>Reportes</span>
               </Link>
             )}
             {hasPermission(session.user, "gestionar_campanas") && (
@@ -77,7 +77,7 @@ export default async function DashboardLayout({
                 title="Campañas de mensajes"
               >
                 <Megaphone className="size-4" />
-                <span className="hidden sm:inline">Campañas</span>
+                <span>Campañas</span>
               </Link>
             )}
             <Link
@@ -86,7 +86,7 @@ export default async function DashboardLayout({
               title="Estado de conexión WhatsApp"
             >
               <Wifi className="size-4" />
-              <span className="hidden sm:inline">Conexión</span>
+              <span>Conexión</span>
             </Link>
             {hasPermission(session.user, "gestionar_contactos") && (
               <Link
@@ -95,15 +95,69 @@ export default async function DashboardLayout({
                 title="Configuración"
               >
                 <Settings className="size-4" />
-                <span className="hidden sm:inline">Config.</span>
+                <span>Config.</span>
               </Link>
             )}
-          </>
+          </div>
         )}
         <UserMenu nombre={session.user.nombre} email={session.user.email} />
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <BugReportButton />
+      {session.user.businessId && (
+        <nav className="flex h-14 shrink-0 items-center justify-around border-t bg-background/95 px-2 backdrop-blur-md sm:hidden">
+          <Link
+            href="/dashboard"
+            className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <MessageSquare className="size-5" />
+            <span className="text-[10px] font-medium">Chats</span>
+          </Link>
+          {hasPermission(session.user, "ver_embudo") && (
+            <Link
+              href="/dashboard/embudo"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Filter className="size-5" />
+              <span className="text-[10px] font-medium">Embudo</span>
+            </Link>
+          )}
+          {hasPermission(session.user, "ver_reportes") && (
+            <Link
+              href="/dashboard/reportes"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <BarChart2 className="size-5" />
+              <span className="text-[10px] font-medium">Reportes</span>
+            </Link>
+          )}
+          {hasPermission(session.user, "gestionar_campanas") && (
+            <Link
+              href="/dashboard/campanas"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Megaphone className="size-5" />
+              <span className="text-[10px] font-medium">Campañas</span>
+            </Link>
+          )}
+          <Link
+            href="/dashboard/conexion"
+            className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Wifi className="size-5" />
+            <span className="text-[10px] font-medium">Conexión</span>
+          </Link>
+          {hasPermission(session.user, "gestionar_contactos") && (
+            <Link
+              href="/dashboard/configuracion"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings className="size-5" />
+              <span className="text-[10px] font-medium">Config.</span>
+            </Link>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

@@ -100,6 +100,99 @@ async function insertBotMemory(tablaMemoria: string, uidUsuario: string, canal: 
   );
 }
 
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  let body: { logId?: string; action?: string; mensaje?: string };
+  try {
+    body = (await req.json()) as { logId?: string; action?: string; mensaje?: string };
+  } catch {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+  }
+
+  const { logId, action, mensaje } = body;
+  if (!logId || (action !== "approve" && action !== "discard")) {
+    return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 });
+  }
+
+  const log = await prisma.followUpLog.findUnique({
+    where: { id: logId },
+    select: {
+      id: true,
+      businessId: true,
+      stageId: true,
+      canal: true,
+      uidUsuario: true,
+      instanciaId: true,
+      mensajeEnviado: true,
+      aprobado: true,
+      contact: { select: { nombre: true } },
+    },
+  });
+
+  if (!log) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (log.aprobado !== null) return NextResponse.json({ error: "Ya procesada" }, { status: 409 });
+
+  if (action === "discard") {
+    await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
+    return NextResponse.json({ ok: true, action: "discard" });
+  }
+
+  // approve
+  const textoEnviar = mensaje?.trim() || log.mensajeEnviado;
+  if (!textoEnviar) return NextResponse.json({ error: "Sin mensaje" }, { status: 400 });
+
+  try {
+    if (log.canal === "whatsapp") {
+      await sendWhatsApp(log.instanciaId, log.uidUsuario, textoEnviar);
+    } else {
+      const inst = await prisma.businessInstance.findFirst({
+        where: { instanciaId: log.instanciaId, canal: log.canal },
+        select: { metaPageId: true, metaPageAccessToken: true },
+      });
+      if (!inst?.metaPageAccessToken || !inst.metaPageId) {
+        return NextResponse.json({ error: "Sin token Meta configurado" }, { status: 422 });
+      }
+      await sendMeta(inst.metaPageId, inst.metaPageAccessToken, log.uidUsuario, textoEnviar);
+    }
+  } catch (e) {
+    console.error("[approve-link POST] Error al enviar:", e);
+    return NextResponse.json({ error: "Error al enviar el mensaje" }, { status: 500 });
+  }
+
+  const [business, stage] = await Promise.all([
+    prisma.business.findUnique({ where: { id: log.businessId }, select: { nombre: true, tablaMemoria: true } }),
+    prisma.funnelStage.findUnique({ where: { id: log.stageId }, select: { nombre: true } }),
+  ]);
+
+  if (business?.tablaMemoria) {
+    try {
+      await insertBotMemory(business.tablaMemoria, log.uidUsuario, log.canal, textoEnviar);
+    } catch {
+      // skip silencioso
+    }
+  }
+
+  await prisma.message.create({
+    data: {
+      instanciaId: log.instanciaId,
+      businessId: log.businessId,
+      nombreNegocio: business?.nombre ?? "",
+      canal: log.canal,
+      uidUsuario: log.uidUsuario,
+      rol: "bot",
+      contenido: textoEnviar,
+      tipoMedia: "text",
+      metadata: {
+        fuente: "seguimiento-automatico",
+        etapa: stage?.nombre ?? "",
+        modoEnvio: "manual-aprobado-email",
+      },
+    },
+  });
+
+  await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: true } });
+  return NextResponse.json({ ok: true, action: "approve" });
+}
+
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
   const logId = searchParams.get("logId");

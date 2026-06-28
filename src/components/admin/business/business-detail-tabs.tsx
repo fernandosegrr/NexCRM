@@ -775,44 +775,47 @@ function RoleDrawer({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent side="right" className="w-[420px] overflow-y-auto">
-        <SheetHeader>
+      <SheetContent side="right" className="flex w-full flex-col overflow-hidden sm:w-[420px]">
+        <SheetHeader className="shrink-0">
           <SheetTitle>{role ? "Editar rol" : "Nuevo rol"}</SheetTitle>
         </SheetHeader>
-        <div className="mt-6 space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="role-nombre">Nombre del rol</Label>
-            <Input
-              id="role-nombre"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="ej: Supervisor"
-            />
-          </div>
+        <div className="flex-1 overflow-y-auto py-4">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="role-nombre">Nombre del rol</Label>
+              <Input
+                id="role-nombre"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="ej: Supervisor"
+              />
+            </div>
 
-          <div className="space-y-4">
-            <p className="text-sm font-medium">Permisos</p>
-            {Object.entries(PERMISOS_POR_CATEGORIA).map(([cat, permisos]) => (
-              <div key={cat} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {cat}
-                </p>
-                {permisos.map((p) => (
-                  <div key={p} className="flex items-center gap-2.5">
-                    <Checkbox
-                      id={p}
-                      checked={selectedPermisos.has(p)}
-                      onCheckedChange={() => togglePermiso(p)}
-                    />
-                    <Label htmlFor={p} className="text-sm font-normal cursor-pointer">
-                      {PERMISO_LABELS[p as Permiso]}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            ))}
+            <div className="space-y-4">
+              <p className="text-sm font-medium">Permisos</p>
+              {Object.entries(PERMISOS_POR_CATEGORIA).map(([cat, permisos]) => (
+                <div key={cat} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {cat}
+                  </p>
+                  {permisos.map((p) => (
+                    <div key={p} className="flex items-center gap-2.5">
+                      <Checkbox
+                        id={p}
+                        checked={selectedPermisos.has(p)}
+                        onCheckedChange={() => togglePermiso(p)}
+                      />
+                      <Label htmlFor={p} className="text-sm font-normal cursor-pointer">
+                        {PERMISO_LABELS[p as Permiso]}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-
+        </div>
+        <div className="shrink-0 border-t bg-background pt-4 pb-2">
           <Button
             onClick={handleSubmit}
             disabled={pending || !nombre.trim()}
