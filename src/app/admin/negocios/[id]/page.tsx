@@ -9,6 +9,7 @@ import { buildN8nSnippets, buildN8nPrompt } from "@/lib/n8n-snippets";
 import { shortDate } from "@/lib/format";
 import { ChannelBadge } from "@/components/channel-badge";
 import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
+import { DeleteBusinessButton } from "@/components/admin/business/delete-business-button";
 import { BusinessDetailTabs } from "@/components/admin/business/business-detail-tabs";
 import { Badge } from "@/components/ui/badge";
 
@@ -184,6 +185,10 @@ export default async function BusinessDetailPage({
               businessId={business.id}
               initialPlan={businessPlanData?.plan ?? "basico"}
               initialTablaMemoria={business.tablaMemoria}
+            />
+            <DeleteBusinessButton
+              businessId={business.id}
+              businessNombre={business.nombre}
             />
           </div>
         </div>

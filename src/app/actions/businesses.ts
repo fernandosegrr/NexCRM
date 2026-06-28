@@ -572,3 +572,33 @@ export async function dismissStageSuggestion(
     return { ok: false, error: "No se pudo descartar la sugerencia." };
   }
 }
+
+export async function deleteBusiness(id: string): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!session) return { ok: false, error: "No autorizado" };
+
+  try {
+    // Contact no tiene onDelete: Cascade hacia Business (está keyed por instanciaId).
+    // Borramos contactos explícitamente; sus relaciones (ContactStage, FollowUpLog, etc.)
+    // sí tienen Cascade desde Contact.
+    const instances = await prisma.businessInstance.findMany({
+      where: { businessId: id },
+      select: { instanciaId: true },
+    });
+    const instanciaIds = instances.map((i) => i.instanciaId);
+    if (instanciaIds.length > 0) {
+      await prisma.contact.deleteMany({
+        where: { instanciaId: { in: instanciaIds } },
+      });
+    }
+
+    // El resto (BusinessInstance, Message, FunnelStage, Campaign, PaymentConfig,
+    // BusinessRole, CustomField, etc.) cascadea automáticamente.
+    await prisma.business.delete({ where: { id } });
+
+    revalidatePath("/admin/negocios");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al borrar el negocio" };
+  }
+}
