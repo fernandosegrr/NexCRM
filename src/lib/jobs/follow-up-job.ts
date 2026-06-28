@@ -159,6 +159,24 @@ async function processContact(params: {
       }
     }
 
+    // PASO 3.5: Verificar actividad reciente en los últimos 7 días
+    const actividadReciente = await prisma.followUpLog.findFirst({
+      where: {
+        contactId: contact.id,
+        stageId: stage.id,
+        creadoAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { decision: "omitido", aprobado: null },  // sugerencia pendiente de aprobar
+          { decision: "enviado" },                   // ya enviado automáticamente
+          { decision: "omitido", aprobado: true },   // aprobado desde email/dashboard
+        ],
+      },
+      select: { id: true },
+    });
+    if (actividadReciente) {
+      return { contactId: contact.id, decision: "omitido", razonIA: "Actividad reciente en los últimos 7 días" };
+    }
+
     // PASO 4: Análisis con GPT
     const messages = await prisma.message.findMany({
       where: { instanciaId: contact.instanciaId, uidUsuario: contact.uidUsuario },
