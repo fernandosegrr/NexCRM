@@ -136,6 +136,7 @@ export function Conversations() {
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listSseRef = useRef<EventSource | null>(null);
+  const processedSugIds = useRef(new Set<string>());
 
   // Restore view mode from localStorage (hydration-safe)
   useEffect(() => {
@@ -197,7 +198,9 @@ export function Conversations() {
       .catch(() => {});
     fetch(`/api/follow-up/pending?businessId=${encodeURIComponent(businessId)}`)
       .then((r) => r.json())
-      .then((d: { suggestions?: FollowUpSuggestion[] }) => setSuggestions(d.suggestions ?? []))
+      .then((d: { suggestions?: FollowUpSuggestion[] }) =>
+        setSuggestions((d.suggestions ?? []).filter((s) => !processedSugIds.current.has(s.id))),
+      )
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts[0]?.businessId]);
@@ -384,6 +387,7 @@ export function Conversations() {
       body: JSON.stringify({ followUpLogId: id }),
     });
     if (r.ok) {
+      processedSugIds.current.add(id);
       setSuggestions((prev) => prev.filter((s) => s.id !== id));
       toast.success("Mensaje enviado correctamente.");
     } else {
@@ -398,6 +402,7 @@ export function Conversations() {
       body: JSON.stringify({ followUpLogId: id }),
     });
     if (r.ok) {
+      processedSugIds.current.add(id);
       setSuggestions((prev) => prev.filter((s) => s.id !== id));
     } else {
       toast.error("No se pudo descartar la sugerencia.");

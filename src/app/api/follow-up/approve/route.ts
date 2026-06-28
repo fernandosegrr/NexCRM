@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     select: {
       id: true,
       businessId: true,
+      contactId: true,
       stageId: true,
       canal: true,
       uidUsuario: true,
@@ -86,7 +87,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (!log.mensajeEnviado) {
-    return NextResponse.json({ error: "Sin mensaje configurado" }, { status: 422 });
+    // Sin mensaje configurado: descartar todos los logs pendientes de este contacto
+    await prisma.followUpLog.updateMany({
+      where: { contactId: log.contactId, businessId: log.businessId, aprobado: null },
+      data: { aprobado: false },
+    });
+    return NextResponse.json({ ok: true });
   }
 
   try {
@@ -142,9 +148,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Marcar este log como aprobado y limpiar todos los pendientes del mismo contacto
   await prisma.followUpLog.update({
     where: { id: log.id },
     data: { aprobado: true },
+  });
+  await prisma.followUpLog.updateMany({
+    where: { contactId: log.contactId, businessId: log.businessId, aprobado: null },
+    data: { aprobado: false },
   });
 
   return NextResponse.json({ ok: true });
@@ -160,7 +171,7 @@ export async function PATCH(req: NextRequest) {
 
   const log = await prisma.followUpLog.findUnique({
     where: { id: body.followUpLogId },
-    select: { businessId: true, aprobado: true },
+    select: { businessId: true, contactId: true, aprobado: true },
   });
 
   if (!log) return NextResponse.json({ error: "Sugerencia no encontrada" }, { status: 404 });
@@ -170,8 +181,9 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  await prisma.followUpLog.update({
-    where: { id: body.followUpLogId },
+  // Descartar todos los logs pendientes de este contacto (no solo el seleccionado)
+  await prisma.followUpLog.updateMany({
+    where: { contactId: log.contactId, businessId: log.businessId, aprobado: null },
     data: { aprobado: false },
   });
 
