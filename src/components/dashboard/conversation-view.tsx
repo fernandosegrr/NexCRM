@@ -556,9 +556,22 @@ export function ConversationView({
 
     {/* Panel de contacto — móvil: bottom sheet */}
     <Sheet open={panelOpen && !isDesktop} onOpenChange={setPanelOpen}>
-      <SheetContent side="bottom" className="h-[85dvh] rounded-t-2xl p-0">
-        <SheetHeader className="shrink-0 p-4 pb-3 text-left">
+      <SheetContent
+        side="bottom"
+        className="z-40 h-[85dvh] rounded-t-2xl p-0"
+        onPointerDownOutside={() => setPanelOpen(false)}
+      >
+        <SheetHeader className="flex shrink-0 flex-row items-center justify-between p-4 pb-3">
           <SheetTitle>Ficha del contacto</SheetTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => setPanelOpen(false)}
+            aria-label="Cerrar panel"
+          >
+            <X className="size-4" />
+          </Button>
         </SheetHeader>
         <div
           className="min-h-0 flex-1 overflow-y-auto"

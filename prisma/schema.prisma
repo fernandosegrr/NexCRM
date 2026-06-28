@@ -310,6 +310,9 @@ model Campaign {
   delayMin       Int           @default(8)
   delayMax       Int           @default(20)
   riesgoAceptado Boolean       @default(false)
+  tipoMensaje    String        @default("texto") // 'texto'|'imagen'|'documento'
+  mediaUrl       String? // URL pública de Cloudinary (imagen o documento)
+  mediaCaption   String? // texto que acompaña la imagen/documento
   creadoAt       DateTime      @default(now())
   iniciadoAt     DateTime?
   completadoAt   DateTime?

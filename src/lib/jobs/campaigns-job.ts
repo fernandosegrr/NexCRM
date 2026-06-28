@@ -15,9 +15,45 @@ async function sendWaText(instanciaId: string, phone: string, texto: string): Pr
           "Content-Type": "application/json",
           apikey: EVOLUTION_API_KEY,
         },
+        body: JSON.stringify({ number: phone, text: texto }),
+        signal: ctrl.signal,
+      },
+    );
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    clearTimeout(timer);
+    return false;
+  }
+}
+
+async function sendWaMedia(
+  instanciaId: string,
+  phone: string,
+  mediatype: "image" | "document",
+  mediaUrl: string,
+  caption: string,
+  fileName: string,
+): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const mimetype = mediatype === "image" ? "image/jpeg" : "application/pdf";
+  try {
+    const res = await fetch(
+      `${EVOLUTION_API_URL}/message/sendMedia/${encodeURIComponent(instanciaId)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: EVOLUTION_API_KEY,
+        },
         body: JSON.stringify({
           number: phone,
-          text: texto,
+          mediatype,
+          mimetype,
+          caption,
+          media: mediaUrl,
+          fileName,
         }),
         signal: ctrl.signal,
       },
@@ -52,6 +88,9 @@ async function processCampaign(campaignId: string): Promise<void> {
       select: {
         id: true,
         mensaje: true,
+        tipoMensaje: true,
+        mediaUrl: true,
+        mediaCaption: true,
         instanciaId: true,
         filtroEtapa: true,
         totalContactos: true,
@@ -121,7 +160,30 @@ async function processCampaign(campaignId: string): Promise<void> {
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
-      const ok = await sendWaText(campaign.instanciaId, contactUids[i], campaign.mensaje);
+      let ok: boolean;
+      if (campaign.tipoMensaje === "imagen" && campaign.mediaUrl) {
+        const fileName = campaign.mediaUrl.split("/").pop() ?? "imagen";
+        ok = await sendWaMedia(
+          campaign.instanciaId,
+          contactUids[i],
+          "image",
+          campaign.mediaUrl,
+          campaign.mediaCaption ?? "",
+          fileName,
+        );
+      } else if (campaign.tipoMensaje === "documento" && campaign.mediaUrl) {
+        const fileName = campaign.mediaUrl.split("/").pop() ?? "documento";
+        ok = await sendWaMedia(
+          campaign.instanciaId,
+          contactUids[i],
+          "document",
+          campaign.mediaUrl,
+          campaign.mediaCaption ?? "",
+          fileName,
+        );
+      } else {
+        ok = await sendWaText(campaign.instanciaId, contactUids[i], campaign.mensaje);
+      }
 
       await prisma.campaignLog.create({
         data: {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -10,6 +10,9 @@ type CampaignDetail = {
   id: string;
   nombre: string;
   mensaje: string;
+  tipoMensaje: string;
+  mediaUrl: string | null;
+  mediaCaption: string | null;
   estado: string;
   totalContactos: number;
   enviados: number;
@@ -132,10 +135,43 @@ export default function CampanaDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* Mensaje */}
-      <div className="rounded-lg border p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase mb-2">Mensaje</p>
-        <p className="text-sm whitespace-pre-wrap">{campaign.mensaje}</p>
+      {/* Contenido de la campaña */}
+      <div className="rounded-lg border p-4 space-y-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase">Contenido</p>
+        {campaign.tipoMensaje === "texto" ? (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-sm whitespace-pre-wrap">{campaign.mensaje}</p>
+          </div>
+        ) : campaign.tipoMensaje === "imagen" && campaign.mediaUrl ? (
+          <div className="space-y-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={campaign.mediaUrl}
+              alt="Imagen de campaña"
+              className="w-full max-h-48 rounded-lg object-cover"
+            />
+            {campaign.mediaCaption && (
+              <p className="text-sm text-muted-foreground">{campaign.mediaCaption}</p>
+            )}
+          </div>
+        ) : campaign.tipoMensaje === "documento" && campaign.mediaUrl ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+              <FileText className="size-5 shrink-0 text-muted-foreground" />
+              <a
+                href={campaign.mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-sm hover:underline"
+              >
+                {campaign.mediaUrl.split("/").pop()}
+              </a>
+            </div>
+            {campaign.mediaCaption && (
+              <p className="text-sm text-muted-foreground">{campaign.mediaCaption}</p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Logs */}

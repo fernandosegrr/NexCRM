@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -11,6 +11,9 @@ import {
   Clock,
   XCircle,
   Ban,
+  Upload,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -243,6 +246,11 @@ function CampanaWizard({
   const [delayMax, setDelayMax] = useState(20);
   const [totalEstimado, setTotalEstimado] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tipoMensaje, setTipoMensaje] = useState<"texto" | "imagen" | "documento">("texto");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaCaption, setMediaCaption] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -271,13 +279,41 @@ function CampanaWizard({
     setDelayMin(8);
     setDelayMax(20);
     setTotalEstimado(null);
+    setTipoMensaje("texto");
+    setMediaUrl("");
+    setMediaCaption("");
+  }
+
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("folder", "nexai-campaigns");
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Error al subir archivo");
+      setMediaUrl(data.url ?? "");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleNext() {
     if (step === 0 && !riesgoAceptado) return;
     if (step === 1) {
-      if (!nombre.trim() || !mensaje.trim() || !instanciaId) {
-        toast.error("Completa todos los campos.");
+      if (!nombre.trim() || !instanciaId) {
+        toast.error("Completa el nombre e instancia.");
+        return;
+      }
+      if (tipoMensaje === "texto" && !mensaje.trim()) {
+        toast.error("Escribe el mensaje de la campaña.");
+        return;
+      }
+      if ((tipoMensaje === "imagen" || tipoMensaje === "documento") && !mediaUrl) {
+        toast.error("Sube el archivo antes de continuar.");
         return;
       }
       setLoading(true);
@@ -310,6 +346,9 @@ function CampanaWizard({
           delayMin,
           delayMax,
           riesgoAceptado: true,
+          tipoMensaje,
+          mediaUrl: mediaUrl || undefined,
+          mediaCaption: mediaCaption || undefined,
         }),
       });
       const data = (await res.json()) as { campaign?: Campaign; error?: string };
@@ -425,18 +464,100 @@ function CampanaWizard({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Mensaje</Label>
-              <Textarea
-                placeholder="Escribe el mensaje que recibirán los contactos..."
-                rows={4}
-                value={mensaje}
-                onChange={(e) => setMensaje(e.target.value)}
-                className="resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Puedes usar *negritas*, _cursiva_ (formato WhatsApp).
-              </p>
+              <Label>Tipo de mensaje</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["texto", "imagen", "documento"] as const).map((tipo) => (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => { setTipoMensaje(tipo); setMediaUrl(""); setMediaCaption(""); }}
+                    className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-xs font-medium transition-colors ${
+                      tipoMensaje === tipo
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {tipo === "texto" ? <span className="text-base">📝</span> : tipo === "imagen" ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                    {tipo === "texto" ? "Solo texto" : tipo === "imagen" ? "Imagen" : "Documento"}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {tipoMensaje === "texto" && (
+              <div className="space-y-1.5">
+                <Label>Mensaje</Label>
+                <Textarea
+                  placeholder="Escribe el mensaje que recibirán los contactos..."
+                  rows={4}
+                  value={mensaje}
+                  onChange={(e) => setMensaje(e.target.value)}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Puedes usar *negritas*, _cursiva_ (formato WhatsApp).
+                </p>
+              </div>
+            )}
+
+            {(tipoMensaje === "imagen" || tipoMensaje === "documento") && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>
+                    {tipoMensaje === "imagen" ? "Imagen" : "Documento"} (Cloudinary)
+                  </Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept={tipoMensaje === "imagen" ? "image/jpeg,image/png,image/webp" : ".pdf,.doc,.docx,.xlsx"}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleFileUpload(file);
+                    }}
+                  />
+                  {mediaUrl ? (
+                    <div className="flex items-center gap-2 rounded-lg border p-3">
+                      {tipoMensaje === "imagen" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={mediaUrl} alt="preview" className="h-16 w-16 rounded object-cover" />
+                      ) : (
+                        <FileText className="size-8 shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs text-muted-foreground">{mediaUrl.split("/").pop()}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setMediaUrl(""); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-sm text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    >
+                      <Upload className="size-4" />
+                      {uploading ? "Subiendo..." : `Seleccionar ${tipoMensaje === "imagen" ? "imagen" : "documento"}`}
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Caption (opcional)</Label>
+                  <Input
+                    placeholder="Texto que acompaña el archivo..."
+                    value={mediaCaption}
+                    onChange={(e) => setMediaCaption(e.target.value)}
+                    maxLength={1024}
+                  />
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Delay entre mensajes: {delayMin}–{delayMax} segundos</Label>
               <p className="text-xs text-muted-foreground">
@@ -492,9 +613,32 @@ function CampanaWizard({
                 <span className="text-muted-foreground">Delay entre mensajes</span>
                 <span className="font-medium">{delayMin}–{delayMax}s</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tipo</span>
+                <span className="font-medium capitalize">{tipoMensaje}</span>
+              </div>
               <div className="pt-1 border-t">
-                <p className="text-xs text-muted-foreground">Mensaje:</p>
-                <p className="mt-1 text-sm whitespace-pre-wrap">{mensaje}</p>
+                {tipoMensaje === "texto" ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">Mensaje:</p>
+                    <p className="mt-1 text-sm whitespace-pre-wrap">{mensaje}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Archivo:</p>
+                    {tipoMensaje === "imagen" && mediaUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={mediaUrl} alt="preview" className="mt-1 h-24 w-full rounded object-cover" />
+                    )}
+                    {tipoMensaje === "documento" && (
+                      <div className="mt-1 flex items-center gap-2 text-sm">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{mediaUrl.split("/").pop()}</span>
+                      </div>
+                    )}
+                    {mediaCaption && <p className="mt-1 text-xs text-muted-foreground">Caption: {mediaCaption}</p>}
+                  </>
+                )}
               </div>
             </div>
             <p className="text-xs text-muted-foreground">

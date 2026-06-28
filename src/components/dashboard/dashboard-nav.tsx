@@ -11,7 +11,6 @@ import {
   Megaphone,
   MessageCircle,
   MoreHorizontal,
-  Settings,
   Wifi,
 } from "lucide-react";
 
@@ -51,7 +50,6 @@ function buildItems(permisos: NavPermisos): NavItem[] {
     { href: "/dashboard/campanas", label: "Campañas", icon: Megaphone, show: permisos.campanas },
     { href: "/dashboard/reportes", label: "Reportes", icon: BarChart2, show: permisos.reportes },
     { href: "/dashboard/conexion", label: "Conexión", icon: Wifi, show: true },
-    { href: "/dashboard/configuracion", label: "Config.", icon: Settings, show: permisos.config },
   ];
 }
 
@@ -115,13 +113,11 @@ export function DashboardMobileNav({ permisos }: { permisos: NavPermisos }) {
   );
 
   // El menú "Más" está activo cuando estamos en una de sus rutas internas.
-  const moreActive =
-    pathname.startsWith("/dashboard/conexion") ||
-    pathname.startsWith("/dashboard/configuracion");
+  const moreActive = pathname.startsWith("/dashboard/conexion");
 
   return (
     <>
-      <nav className="flex h-14 shrink-0 items-center justify-around border-t bg-background/95 px-1 backdrop-blur-md sm:hidden">
+      <nav className="relative z-50 flex h-14 shrink-0 items-center justify-around border-t bg-background/95 px-1 backdrop-blur-md sm:hidden">
         {primary.map((item) => {
           const active = isActive(pathname, item);
           return (
@@ -166,19 +162,6 @@ export function DashboardMobileNav({ permisos }: { permisos: NavPermisos }) {
                   <Wifi className="size-5 shrink-0" /> Conexión
                 </Link>
               </SheetClose>
-              {permisos.config && (
-                <SheetClose asChild>
-                  <Link
-                    href="/dashboard/configuracion"
-                    className={cn(
-                      "flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-accent",
-                      pathname.startsWith("/dashboard/configuracion") ? ACTIVE : "text-foreground",
-                    )}
-                  >
-                    <Settings className="size-5 shrink-0" /> Configuración
-                  </Link>
-                </SheetClose>
-              )}
               <button
                 onClick={() => {
                   setMoreOpen(false);

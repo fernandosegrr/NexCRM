@@ -58,9 +58,11 @@ function InstanceCard({ instance }: { instance: InstanceStatusCard }) {
     }
   }
 
-  // Auto-check silencioso al montar (sin toast para no spamear N instancias)
+  // Auto-check silencioso al montar + polling cada 30s
   useEffect(() => {
     void check(true);
+    const interval = setInterval(() => { void check(true); }, 30_000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

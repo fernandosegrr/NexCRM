@@ -28,13 +28,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Archivo demasiado grande (máx 25 MB)" }, { status: 413 });
   }
 
+  const folder = (formData.get("folder") as string | null) ?? "crm-replies";
   const buffer = Buffer.from(await file.arrayBuffer());
   const resourceType = getResourceType(file.type);
 
   try {
     const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
       cloudinary.uploader
-        .upload_stream({ resource_type: resourceType, folder: "crm-replies" }, (err, res) => {
+        .upload_stream({ resource_type: resourceType, folder }, (err, res) => {
           if (err || !res) reject(err ?? new Error("Upload failed"));
           else resolve(res as { secure_url: string });
         })

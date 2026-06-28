@@ -115,10 +115,15 @@ export async function classifyContact(
     });
     if (recent.length === 0) return null;
 
-    const transcript = recent
-      .reverse()
+    const chronological = recent.reverse();
+    const transcript = chronological
       .map((m) => `${rolLabel(m.rol)}: ${m.contenido?.trim() || `[${m.tipoMedia}]`}`)
       .join("\n");
+
+    const lastMsg = chronological.at(-1);
+    const lastMsgContext = lastMsg
+      ? `Último mensaje del historial:\nROL: ${rolLabel(lastMsg.rol)} — ${lastMsg.contenido?.trim() || `[${lastMsg.tipoMedia}]`}`
+      : "";
 
     const stageList = stages
       .map((s, i) => `${i + 1}. ${s.nombre}${s.descripcion ? ` — ${s.descripcion}` : ""}`)
@@ -128,10 +133,15 @@ export async function classifyContact(
       "Eres un clasificador de embudo de ventas para un CRM de PyMEs mexicanas. " +
       "Dada una conversación entre un cliente y un negocio (WhatsApp/Instagram/Messenger), " +
       "decides en qué etapa del embudo está el cliente, basándote en las descripciones de cada etapa. " +
-      "Sé conservador: si no hay señales claras, responde NINGUNA. Respondes SOLO con un objeto JSON válido.";
+      "Sé conservador: si no hay señales claras, responde NINGUNA. Respondes SOLO con un objeto JSON válido.\n\n" +
+      "REGLA CRÍTICA sobre cambios de etapa: " +
+      "Solo sugiere cambioEtapa=true si el último mensaje en el historial es del USUARIO (rol='user'), no del bot. " +
+      "Si el último mensaje es del bot/agente, el usuario no ha reaccionado aún — no se puede confirmar avance de etapa. " +
+      "En ese caso: etapaDetectada = etapa actual, cambioEtapa=false.";
 
     const user =
       `Etapas del embudo (en orden):\n${stageList}\n\n` +
+      (lastMsgContext ? `${lastMsgContext}\n\n` : "") +
       `Conversación (del más antiguo al más reciente):\n${transcript.slice(0, 8000)}\n\n` +
       `Devuelve JSON: {"etapa":"<nombre EXACTO de una etapa de la lista, o NINGUNA>","razon":"<máximo una frase en español>"}`;
 

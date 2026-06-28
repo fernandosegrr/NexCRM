@@ -53,6 +53,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     delayMin?: number;
     delayMax?: number;
     riesgoAceptado?: boolean;
+    tipoMensaje?: string;
+    mediaUrl?: string;
+    mediaCaption?: string;
   };
   try {
     body = await req.json() as typeof body;
@@ -60,10 +63,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Body inválido." }, { status: 400 });
   }
 
-  const { nombre, mensaje, instanciaId, filtroEtapa, delayMin = 8, delayMax = 20, riesgoAceptado } = body;
+  const {
+    nombre,
+    mensaje,
+    instanciaId,
+    filtroEtapa,
+    delayMin = 8,
+    delayMax = 20,
+    riesgoAceptado,
+    tipoMensaje = "texto",
+    mediaUrl,
+    mediaCaption,
+  } = body;
 
-  if (!nombre?.trim() || !mensaje?.trim() || !instanciaId) {
+  // Para texto se requiere mensaje; para imagen/documento se requiere mediaUrl
+  const needsMensaje = tipoMensaje === "texto";
+  if (!nombre?.trim() || !instanciaId) {
     return NextResponse.json({ error: "Faltan campos requeridos." }, { status: 422 });
+  }
+  if (needsMensaje && !mensaje?.trim()) {
+    return NextResponse.json({ error: "El mensaje es requerido para campañas de texto." }, { status: 422 });
+  }
+  if (!needsMensaje && !mediaUrl) {
+    return NextResponse.json({ error: "La URL del archivo es requerida para este tipo de campaña." }, { status: 422 });
   }
 
   if (!riesgoAceptado) {
@@ -111,7 +133,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     data: {
       businessId,
       nombre: nombre.trim(),
-      mensaje: mensaje.trim(),
+      mensaje: mensaje?.trim() ?? "",
       canal: "whatsapp",
       instanciaId,
       filtroEtapa: filtroEtapa ?? null,
@@ -119,6 +141,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       delayMin: Math.min(dMin, dMax),
       delayMax: Math.max(dMin, dMax),
       riesgoAceptado: true,
+      tipoMensaje,
+      mediaUrl: mediaUrl ?? null,
+      mediaCaption: mediaCaption ?? null,
     },
   });
 
