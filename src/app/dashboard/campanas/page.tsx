@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { hasPermission } from "@/lib/permissions";
 import { AccessDenied } from "@/components/dashboard/access-denied";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -60,10 +61,22 @@ const ESTADO_CONFIG: Record<string, { label: string; icon: React.ReactNode; vari
 };
 
 export default function CampanasPage() {
+  return (
+    <ErrorBoundary page="campanas">
+      <CampanasPageInner />
+    </ErrorBoundary>
+  );
+}
+
+function CampanasPageInner() {
   const { data: session, status } = useSession();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+
+  useEffect(() => {
+    console.log("[Campanas] montado correctamente");
+  }, []);
 
   const canManage =
     status === "loading" || !session

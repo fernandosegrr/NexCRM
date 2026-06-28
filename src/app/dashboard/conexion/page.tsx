@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 type QrState =
   | { stage: "idle" }
@@ -153,9 +154,21 @@ function QrSection({ instanciaId }: { instanciaId: string }) {
 }
 
 export default function ConexionPage() {
+  return (
+    <ErrorBoundary page="conexion">
+      <ConexionPageInner />
+    </ErrorBoundary>
+  );
+}
+
+function ConexionPageInner() {
   const { data: session } = useSession();
   const [instances, setInstances] = useState<Instance[] | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    console.log("[Conexion] montado correctamente");
+  }, []);
 
   useEffect(() => {
     async function load() {

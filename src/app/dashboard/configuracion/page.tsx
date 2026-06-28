@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { hasPermission } from "@/lib/permissions";
 import { AccessDenied } from "@/components/dashboard/access-denied";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,14 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 export default function ConfiguracionPage() {
+  return (
+    <ErrorBoundary page="configuracion">
+      <ConfiguracionPageInner />
+    </ErrorBoundary>
+  );
+}
+
+function ConfiguracionPageInner() {
   const { data: session, status } = useSession();
   const [fields, setFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +78,10 @@ export default function ConfiguracionPage() {
     } catch { /* ignore */ }
     setLoading(false);
   }
+
+  useEffect(() => {
+    console.log("[Configuracion] montado correctamente");
+  }, []);
 
   useEffect(() => { void loadFields(); }, []);
 

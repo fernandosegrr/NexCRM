@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
 import { Logo } from "@/components/brand/logo";
 import { UserMenu } from "@/components/admin/user-menu";
+import { Providers } from "@/components/providers";
 import {
   DashboardDesktopNav,
   DashboardMobileNav,
@@ -37,6 +38,7 @@ export default async function DashboardLayout({
   };
 
   return (
+    <Providers session={session}>
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
         <Logo showText={false} />
@@ -55,5 +57,6 @@ export default async function DashboardLayout({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       {session.user.businessId && <DashboardMobileNav permisos={permisos} />}
     </div>
+    </Providers>
   );
 }
