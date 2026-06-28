@@ -11,6 +11,15 @@ const getIncidentCount = unstable_cache(
   { revalidate: 60 },
 );
 
+const getOverduePaymentsCount = unstable_cache(
+  () =>
+    prisma.paymentConfig.count({
+      where: { activo: true, suspendido: false, proximoPago: { lt: new Date() } },
+    }),
+  ["overdue-payments-count"],
+  { revalidate: 300 },
+);
+
 export default async function AdminLayout({
   children,
 }: {
@@ -21,13 +30,17 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const incidentCount = await getIncidentCount();
+  const [incidentCount, overduePaymentsCount] = await Promise.all([
+    getIncidentCount(),
+    getOverduePaymentsCount(),
+  ]);
 
   return (
     <AdminShell
       nombre={session.user.nombre}
       email={session.user.email}
       incidentCount={incidentCount}
+      overduePaymentsCount={overduePaymentsCount}
     >
       {children}
     </AdminShell>

@@ -11,7 +11,7 @@ const running = new Set<string>();
 const MINUTE = 60_000;
 
 // Ids de los jobs registrados en la tabla cron_executions.
-const JOB_IDS = ["health-check", "follow-up", "weekly-summary", "campaigns"] as const;
+const JOB_IDS = ["health-check", "follow-up", "weekly-summary", "campaigns", "payments"] as const;
 
 /**
  * Inicializa el scheduler interno una sola vez por proceso.
@@ -49,6 +49,15 @@ export function startScheduler() {
     "0 14 * * 1",
     () => {
       void runJob("weekly-summary", runWeeklySummary, 6 * 60 * MINUTE);
+    },
+    { timezone: "UTC" },
+  );
+
+  // ── Pagos: diario 9 AM México (15:00 UTC) ─────────────────────
+  cron.schedule(
+    "0 15 * * *",
+    () => {
+      void runJob("payments", runPayments, 6 * 60 * MINUTE);
     },
     { timezone: "UTC" },
   );
@@ -166,4 +175,9 @@ async function runCampaigns() {
 async function runWeeklySummary() {
   const { runWeeklySummaryJob } = await import("./jobs/weekly-summary-job");
   return runWeeklySummaryJob();
+}
+
+async function runPayments() {
+  const { runPaymentsJob } = await import("./jobs/payments-job");
+  return runPaymentsJob();
 }

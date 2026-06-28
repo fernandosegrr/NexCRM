@@ -203,6 +203,174 @@ export function buildClientDisconnectHtml({
 </html>`;
 }
 
+// ── Pagos / cobros ─────────────────────────────────────────────────────────
+
+export type PaymentEmailTipo =
+  | "aviso_7d"
+  | "aviso_3d"
+  | "aviso_1d"
+  | "dia_vencimiento"
+  | "mora_1d"
+  | "mora_3d"
+  | "suspendido"
+  | "pago_confirmado";
+
+function formatMexDateLong(d: Date): string {
+  return d.toLocaleDateString("es-MX", {
+    timeZone: "America/Mexico_City",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function periodoLabel(d: Date): string {
+  return d.toLocaleDateString("es-MX", {
+    timeZone: "America/Mexico_City",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function money(n: number): string {
+  return `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+}
+
+function paymentRow(label: string, value: string, alt = false, strong = false): string {
+  return `<tr${alt ? ' style="background:#f9fafb;"' : ""}>
+    <td style="padding:8px 12px;font-size:13px;color:#374151;">${label}</td>
+    <td style="padding:8px 12px;font-size:13px;color:#111827;${strong ? "font-weight:600;" : ""}">${value}</td>
+  </tr>`;
+}
+
+/**
+ * Email de cobro/recordatorio para clientes. Cubre los 8 tipos del cron de pagos
+ * (avisos previos, día de vencimiento, mora, suspensión y pago confirmado).
+ */
+export function buildPaymentReminderHtml({
+  tipo,
+  businessNombre,
+  monto,
+  proximoPago,
+  diasMora,
+  diasGracia,
+  fechaPago,
+  appUrl,
+}: {
+  tipo: PaymentEmailTipo;
+  businessNombre: string;
+  monto: number;
+  proximoPago: Date;
+  diasMora?: number;
+  diasGracia?: number;
+  fechaPago?: Date;
+  appUrl?: string;
+}): string {
+  const url =
+    appUrl ??
+    process.env.APP_URL ??
+    process.env.NEXTAUTH_URL ??
+    "https://postgres-nexcrm.d6cr6o.easypanel.host";
+
+  // Apariencia por categoría
+  let headerColor = "#6366F1"; // violeta (avisos previos)
+  let headerTitle = "Recordatorio de pago — NexAI";
+  let intro = "";
+
+  if (tipo === "aviso_7d") {
+    intro = `Tu servicio de NexAI vence en <strong>7 días</strong>. Te compartimos los detalles para que estés al día.`;
+  } else if (tipo === "aviso_3d") {
+    intro = `Tu servicio de NexAI vence en <strong>3 días</strong>. Te recordamos el detalle de tu próximo pago.`;
+  } else if (tipo === "aviso_1d") {
+    intro = `Tu servicio de NexAI vence <strong>mañana</strong>. Realiza tu pago para evitar interrupciones.`;
+  } else if (tipo === "dia_vencimiento") {
+    headerColor = "#f59e0b"; // amarillo
+    headerTitle = "Tu pago vence hoy — NexAI";
+    intro = `Hoy es la fecha de vencimiento de tu servicio NexAI. Te pedimos realizar tu pago para mantener el servicio activo.`;
+  } else if (tipo === "mora_1d" || tipo === "mora_3d") {
+    headerColor = "#ea580c"; // naranja
+    headerTitle = "Tu pago está pendiente — NexAI";
+    intro = `Tu servicio venció hace <strong>${diasMora ?? 1} día(s)</strong>. Regulariza tu pago lo antes posible.`;
+  } else if (tipo === "suspendido") {
+    headerColor = "#dc2626"; // rojo
+    headerTitle = "Tu servicio ha sido suspendido — NexAI";
+    intro = `Tu asistente virtual fue desconectado por falta de pago. En cuanto registremos tu pago, lo reactivaremos.`;
+  } else if (tipo === "pago_confirmado") {
+    headerColor = "#16a34a"; // verde
+    headerTitle = "¡Pago recibido! — NexAI";
+    intro = `Hemos registrado tu pago. ¡Gracias! Tu servicio continuará activo sin interrupciones.`;
+  }
+
+  // Tabla de estado de cuenta o recibo
+  let tablaRows = "";
+  if (tipo === "pago_confirmado") {
+    tablaRows =
+      paymentRow("Negocio", businessNombre, false, true) +
+      paymentRow("Monto", money(monto), true) +
+      paymentRow("Fecha de pago", fechaPago ? formatMexDateLong(fechaPago) : "—") +
+      paymentRow("Próximo pago", formatMexDateLong(proximoPago), true, true);
+  } else {
+    tablaRows =
+      paymentRow("Negocio", businessNombre, false, true) +
+      paymentRow("Servicio", "Chatbot + CRM NexAI", true) +
+      paymentRow("Período", periodoLabel(proximoPago)) +
+      paymentRow("Monto", money(monto), true, true) +
+      paymentRow("Vence", formatMexDateLong(proximoPago));
+  }
+
+  // Bloques especiales
+  let extraBlock = "";
+  if (tipo === "mora_3d" && diasGracia != null) {
+    const restantes = Math.max(0, diasGracia - 3);
+    extraBlock = `<div style="margin:20px 0 0;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">
+      <p style="margin:0;font-size:13px;color:#b91c1c;font-weight:600;">
+        ⚠️ Si no regularizas en ${restantes} día(s) más, tu bot será suspendido automáticamente.
+      </p>
+    </div>`;
+  }
+  if (tipo === "suspendido") {
+    extraBlock = `<div style="margin:20px 0 0;">
+      <a href="mailto:soporte@nexaisolutions.dev?subject=${encodeURIComponent(`Reactivar servicio — ${businessNombre}`)}" style="display:inline-block;background:${headerColor};color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;">
+        Contactar a NexAI
+      </a>
+    </div>`;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#f9fafb;font-family:sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+  <tr>
+    <td style="background:${headerColor};padding:20px 28px;">
+      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${headerTitle}</p>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,.85);font-size:14px;">${businessNombre}</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:28px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#111827;line-height:1.6;">${intro}</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:8px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+        ${tablaRows}
+      </table>
+      ${extraBlock}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 28px;border-top:1px solid #e5e7eb;">
+      <p style="margin:0;font-size:12px;color:#9ca3af;">
+        NexAI · Irapuato, Guanajuato · <a href="${url}/dashboard" style="color:#9ca3af;">Mi panel</a>
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 export function buildBugReportHtml({
   tipo,
   descripcion,

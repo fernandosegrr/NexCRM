@@ -31,6 +31,7 @@ model Business {
   roles        BusinessRole[]
   campos       CustomField[]
   campanas     Campaign[]
+  paymentConfig PaymentConfig?
 
   @@map("businesses")
 }
@@ -342,4 +343,57 @@ model CronExecution {
   ultimoResultado String? // JSON del resultado
 
   @@map("cron_executions")
+}
+
+// ───────────────────────────────────────────────────────────
+// Pagos y cobros
+// ───────────────────────────────────────────────────────────
+
+model PaymentConfig {
+  id           String    @id @default(uuid())
+  businessId   String    @unique
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  montoMensual Float
+  diasGracia   Int       @default(7)
+  proximoPago  DateTime
+  activo       Boolean   @default(true)
+  suspendido   Boolean   @default(false)
+  suspendidoAt DateTime?
+  creadoAt     DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  pagos        Payment[]
+
+  @@map("payment_configs")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  configId      String
+  config        PaymentConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  businessId    String
+  monto         Float
+  periodo       String
+  fechaPago     DateTime
+  fechaVencia   DateTime
+  registradoPor String
+  notas         String?
+  creadoAt      DateTime      @default(now())
+
+  @@index([businessId])
+  @@index([configId])
+  @@map("payments")
+}
+
+model PaymentNotification {
+  id         String   @id @default(uuid())
+  businessId String
+  tipo       String
+  // 'aviso_7d'|'aviso_3d'|'aviso_1d'|'dia_vencimiento'
+  // 'mora_1d'|'mora_3d'|'suspendido'|'pago_confirmado'
+  enviadoAt  DateTime @default(now())
+  exitoso    Boolean  @default(true)
+
+  @@index([businessId])
+  @@index([enviadoAt(sort: Desc)])
+  @@map("payment_notifications")
 }

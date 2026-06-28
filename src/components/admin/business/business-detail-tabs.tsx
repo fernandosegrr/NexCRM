@@ -5,6 +5,7 @@ import {
   BarChart2,
   Bot,
   Check,
+  CreditCard,
   Filter,
   Loader2,
   MoreVertical,
@@ -35,6 +36,12 @@ import { DownloadButton } from "@/components/download-button";
 import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
 import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
 import { EmbudoStatsSection } from "@/components/admin/business/embudo-stats-section";
+import {
+  PaymentsTab,
+  type PaymentConfigDTO,
+  type PaymentDTO,
+  type PaymentNotificationDTO,
+} from "@/components/admin/business/payments-tab";
 import { MetaTokenForm, type MetaTokenStatus } from "@/components/admin/meta-token-form";
 import { StatCard } from "@/components/admin/stat-card";
 import { MensajesPorDiaChart } from "@/components/charts/mensajes-por-dia";
@@ -137,6 +144,10 @@ export type BusinessDetailTabsProps = {
   appUrl: string;
   teamMembers: TeamMember[];
   businessRoles: BusinessRoleWithCount[];
+  paymentConfig: PaymentConfigDTO;
+  payments: PaymentDTO[];
+  paymentNotifications: PaymentNotificationDTO[];
+  defaultTab?: string;
 };
 
 // ── SnippetBlock ──────────────────────────────────────────────────────────
@@ -1157,9 +1168,13 @@ export function BusinessDetailTabs({
   appUrl,
   teamMembers,
   businessRoles,
+  paymentConfig,
+  payments,
+  paymentNotifications,
+  defaultTab,
 }: BusinessDetailTabsProps) {
   return (
-    <Tabs defaultValue="resumen" className="w-full">
+    <Tabs defaultValue={defaultTab ?? "resumen"} className="w-full">
       <TabsList className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="resumen">
           <BarChart2 className="size-4" />
@@ -1180,6 +1195,10 @@ export function BusinessDetailTabs({
         <TabsTrigger value="equipo">
           <Users className="size-4" />
           Equipo
+        </TabsTrigger>
+        <TabsTrigger value="facturacion">
+          <CreditCard className="size-4" />
+          Facturación
         </TabsTrigger>
       </TabsList>
 
@@ -1223,6 +1242,16 @@ export function BusinessDetailTabs({
           businessId={business.id}
           initialMembers={teamMembers}
           initialRoles={businessRoles}
+        />
+      </TabsContent>
+
+      <TabsContent value="facturacion">
+        <PaymentsTab
+          businessId={business.id}
+          businessNombre={business.nombre}
+          config={paymentConfig}
+          pagos={payments}
+          notifications={paymentNotifications}
         />
       </TabsContent>
     </Tabs>

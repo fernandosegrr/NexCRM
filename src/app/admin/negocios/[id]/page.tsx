@@ -25,10 +25,20 @@ export async function generateMetadata({
 
 export default async function BusinessDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { tab?: string };
 }) {
-  const [business, funnelStages, businessPlanData, teamMembers, businessRoles] = await Promise.all([
+  const [
+    business,
+    funnelStages,
+    businessPlanData,
+    teamMembers,
+    businessRoles,
+    paymentConfigRaw,
+    paymentNotificationsRaw,
+  ] = await Promise.all([
     getBusinessById(params.id),
     prisma.funnelStage.findMany({
       where: { businessId: params.id },
@@ -73,9 +83,45 @@ export default async function BusinessDetailPage({
       include: { _count: { select: { usuarios: true } } },
       orderBy: { creadoAt: "asc" },
     }),
+    prisma.paymentConfig.findUnique({
+      where: { businessId: params.id },
+      include: { pagos: { orderBy: { fechaPago: "desc" }, take: 12 } },
+    }),
+    prisma.paymentNotification.findMany({
+      where: { businessId: params.id },
+      orderBy: { enviadoAt: "desc" },
+      take: 10,
+    }),
   ]);
 
   if (!business) notFound();
+
+  // Serializar datos de pago (Date → ISO) para el componente cliente.
+  const paymentConfig = paymentConfigRaw
+    ? {
+        id: paymentConfigRaw.id,
+        montoMensual: paymentConfigRaw.montoMensual,
+        diasGracia: paymentConfigRaw.diasGracia,
+        proximoPago: paymentConfigRaw.proximoPago.toISOString(),
+        activo: paymentConfigRaw.activo,
+        suspendido: paymentConfigRaw.suspendido,
+        suspendidoAt: paymentConfigRaw.suspendidoAt?.toISOString() ?? null,
+      }
+    : null;
+  const payments = (paymentConfigRaw?.pagos ?? []).map((p) => ({
+    id: p.id,
+    monto: p.monto,
+    periodo: p.periodo,
+    fechaPago: p.fechaPago.toISOString(),
+    notas: p.notas,
+  }));
+  const paymentNotifications = paymentNotificationsRaw.map((n) => ({
+    id: n.id,
+    tipo: n.tipo,
+    enviadoAt: n.enviadoAt.toISOString(),
+    exitoso: n.exitoso,
+  }));
+  const defaultTab = searchParams?.tab ?? "resumen";
 
   const appUrl =
     process.env.APP_URL ||
@@ -160,6 +206,10 @@ export default async function BusinessDetailPage({
         appUrl={appUrl}
         teamMembers={teamMembers}
         businessRoles={businessRoles}
+        paymentConfig={paymentConfig}
+        payments={payments}
+        paymentNotifications={paymentNotifications}
+        defaultTab={defaultTab}
       />
     </div>
   );

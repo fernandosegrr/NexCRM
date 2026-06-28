@@ -8,12 +8,21 @@ import { es } from "date-fns/locale";
 import { toast } from "sonner";
 
 import { setBusinessActivo } from "@/app/actions/businesses";
+import { paymentEstado } from "@/lib/payment-status";
 import { ChannelBadge } from "@/components/channel-badge";
 import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { BusinessCard as BusinessCardData } from "@/lib/data";
 import { cn } from "@/lib/utils";
+
+const PAGO_BADGE: Record<string, { label: string; className: string } | null> = {
+  suspendido: { label: "⛔ Suspendido", className: "bg-red-600/20 text-red-500" },
+  vencido: { label: "🔴 Vencido", className: "border border-red-500/50 text-red-500" },
+  por_vencer: { label: "🟡 Por vencer", className: "border border-yellow-500/50 text-yellow-500" },
+  al_corriente: null,
+  sin_config: null,
+};
 
 export function BusinessCard({ business }: { business: BusinessCardData }) {
   const [activo, setActivo] = useState(business.activo);
@@ -34,6 +43,8 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
 
   const waInstance = business.instancias.find((i) => i.canal === "whatsapp");
   const waActivo = waInstance?.activo ?? false;
+
+  const pagoBadge = PAGO_BADGE[paymentEstado(business.pago).estado];
 
   return (
     <Card
@@ -70,13 +81,23 @@ export function BusinessCard({ business }: { business: BusinessCardData }) {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {business.canales.length ? (
             business.canales.map((c) => (
               <ChannelBadge key={c} canal={c} size="xs" />
             ))
           ) : (
             <span className="text-xs text-muted-foreground">Sin canales</span>
+          )}
+          {pagoBadge && (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                pagoBadge.className,
+              )}
+            >
+              {pagoBadge.label}
+            </span>
           )}
         </div>
 

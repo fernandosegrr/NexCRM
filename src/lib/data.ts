@@ -64,6 +64,9 @@ export async function getBusinessesWithStats() {
       include: {
         instancias: { orderBy: { creadoAt: "asc" } },
         _count: { select: { mensajes: true, usuarios: true } },
+        paymentConfig: {
+          select: { suspendido: true, proximoPago: true, activo: true },
+        },
       },
     }),
     prisma.$queryRaw<{ businessId: string; lastAt: Date | null; mesActual: number }[]>(
@@ -100,6 +103,13 @@ export async function getBusinessesWithStats() {
       totalUsuarios: b._count.usuarios,
       lastMensajeAt: activity?.lastAt ? new Date(activity.lastAt).toISOString() : null,
       mensajesMes: activity?.mesActual ?? 0,
+      pago: b.paymentConfig
+        ? {
+            suspendido: b.paymentConfig.suspendido,
+            proximoPago: b.paymentConfig.proximoPago.toISOString(),
+            activo: b.paymentConfig.activo,
+          }
+        : null,
     };
   });
 }
@@ -107,6 +117,38 @@ export async function getBusinessesWithStats() {
 export type BusinessCard = Awaited<
   ReturnType<typeof getBusinessesWithStats>
 >[number];
+
+// ── Pagos / facturación ─────────────────────────────────────────────────────
+
+export async function getPaymentOverview() {
+  const configs = await prisma.paymentConfig.findMany({
+    where: { activo: true },
+    include: {
+      business: { select: { id: true, nombre: true } },
+      pagos: { orderBy: { fechaPago: "desc" }, take: 1 },
+    },
+    orderBy: { proximoPago: "asc" },
+  });
+  return configs.map((c) => ({
+    businessId: c.business.id,
+    businessNombre: c.business.nombre,
+    montoMensual: c.montoMensual,
+    proximoPago: c.proximoPago.toISOString(),
+    suspendido: c.suspendido,
+    suspendidoAt: c.suspendidoAt?.toISOString() ?? null,
+    ultimoPago: c.pagos[0]?.fechaPago.toISOString() ?? null,
+  }));
+}
+
+export type PaymentOverviewItem = Awaited<
+  ReturnType<typeof getPaymentOverview>
+>[number];
+
+export async function getOverduePaymentsCount(): Promise<number> {
+  return prisma.paymentConfig.count({
+    where: { activo: true, suspendido: false, proximoPago: { lt: new Date() } },
+  });
+}
 
 export async function getBusinessById(id: string) {
   const b = await prisma.business.findUnique({

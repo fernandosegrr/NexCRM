@@ -28,9 +28,11 @@ export const ADMIN_NAV: NavItem[] = [
 export function SidebarNav({
   onNavigate,
   incidentCount = 0,
+  overduePaymentsCount = 0,
 }: {
   onNavigate?: () => void;
   incidentCount?: number;
+  overduePaymentsCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -59,6 +61,11 @@ export function SidebarNav({
             {item.href === "/admin/estado" && incidentCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
                 {incidentCount > 99 ? "99+" : incidentCount}
+              </span>
+            )}
+            {item.href === "/admin" && overduePaymentsCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1.5 text-[10px] font-bold text-black">
+                {overduePaymentsCount > 99 ? "99+" : overduePaymentsCount}
               </span>
             )}
           </Link>

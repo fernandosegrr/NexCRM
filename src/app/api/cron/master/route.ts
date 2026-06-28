@@ -35,6 +35,10 @@ export async function GET(req: Request) {
     const { runWeeklySummaryJob } = await import("@/lib/jobs/weekly-summary-job");
     results["weekly-summary"] = await runWeeklySummaryJob().catch((e) => ({ error: String(e) }));
   }
+  if (!job || job === "payments") {
+    const { runPaymentsJob } = await import("@/lib/jobs/payments-job");
+    results["payments"] = await runPaymentsJob().catch((e) => ({ error: String(e) }));
+  }
 
   return NextResponse.json(results);
 }
