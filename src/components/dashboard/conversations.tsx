@@ -594,7 +594,10 @@ export function Conversations() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto overflow-x-hidden"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {loading ? (
             <ListSkeleton />
           ) : error ? (

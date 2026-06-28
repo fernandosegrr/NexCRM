@@ -108,7 +108,10 @@ export default function ConfiguracionPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div
+      className="mx-auto h-full w-full max-w-2xl space-y-6 overflow-y-auto p-4 sm:p-6"
+      style={{ WebkitOverflowScrolling: "touch" }}
+    >
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Campos personalizados</h1>

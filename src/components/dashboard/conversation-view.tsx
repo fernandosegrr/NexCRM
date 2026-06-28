@@ -32,6 +32,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ChannelBadge } from "@/components/channel-badge";
@@ -131,6 +137,16 @@ export function ConversationView({
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Desktop ≥768px usa un sidebar inline; móvil usa un Sheet desde abajo.
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   // Sugerencia de etapa (IA). El componente se remonta por contacto (key),
   // así que el estado inicial desde `contact` es siempre el correcto.
@@ -309,8 +325,8 @@ export function ConversationView({
   }, [messages, error]);
 
   return (
-    <div className="flex h-full min-h-0 w-full">
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 w-full overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
       {/* Encabezado de la conversación */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
@@ -421,7 +437,10 @@ export function ConversationView({
       )}
 
       {/* Mensajes */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-6">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-4 sm:px-6"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         {error ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
             <WifiOff className="mb-3 size-8 opacity-60" />
@@ -470,8 +489,9 @@ export function ConversationView({
                     )}
                   >
                     <div
+                      style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
                       className={cn(
-                        "max-w-[82%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%]",
+                        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%] md:max-w-[60%]",
                         isBot || isPage
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : isHuman
@@ -521,15 +541,36 @@ export function ConversationView({
       />
     </div>
 
-    {/* Panel lateral de contacto */}
-    {panelOpen && (
-      <div className="hidden w-80 shrink-0 border-l border-border overflow-y-auto md:flex md:flex-col">
+    {/* Panel de contacto — desktop: sidebar lateral inline */}
+    {panelOpen && isDesktop && (
+      <div
+        className="hidden w-80 shrink-0 overflow-y-auto border-l border-border md:flex md:flex-col"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         <ContactPanel
           instanciaId={contact.instanciaId}
           uidUsuario={contact.uidUsuario}
         />
       </div>
     )}
+
+    {/* Panel de contacto — móvil: bottom sheet */}
+    <Sheet open={panelOpen && !isDesktop} onOpenChange={setPanelOpen}>
+      <SheetContent side="bottom" className="h-[85dvh] rounded-t-2xl p-0">
+        <SheetHeader className="shrink-0 p-4 pb-3 text-left">
+          <SheetTitle>Ficha del contacto</SheetTitle>
+        </SheetHeader>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <ContactPanel
+            instanciaId={contact.instanciaId}
+            uidUsuario={contact.uidUsuario}
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
     </div>
   );
 }

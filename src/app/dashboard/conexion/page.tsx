@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Wifi, WifiOff, RefreshCw, QrCode } from "lucide-react";
-import Image from "next/image";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -103,12 +102,11 @@ function QrSection({ instanciaId }: { instanciaId: string }) {
     return (
       <div className="flex flex-col items-center gap-4">
         <div className="relative rounded-xl border p-4 shadow-sm">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={`data:image/png;base64,${qrState.base64}`}
             alt="Código QR de WhatsApp"
-            width={256}
-            height={256}
-            className="size-64"
+            className="mx-auto h-auto w-full max-w-[256px]"
           />
         </div>
         <p className="text-sm text-muted-foreground">
@@ -197,7 +195,10 @@ export default function ConexionPage() {
   const waInstances = instances?.filter(() => true) ?? [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div
+      className="mx-auto h-full w-full max-w-2xl space-y-6 overflow-y-auto p-4 sm:p-6"
+      style={{ WebkitOverflowScrolling: "touch" }}
+    >
       <div>
         <h1 className="text-2xl font-semibold">Estado de conexión</h1>
         <p className="mt-1 text-sm text-muted-foreground">
