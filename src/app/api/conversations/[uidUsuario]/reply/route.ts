@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { META_VERSION, metaHost } from "@/lib/meta";
+import { callerCan } from "@/lib/permissions-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -226,6 +227,13 @@ export async function POST(
     session.user.businessId !== inst.businessId
   ) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  if (!(await callerCan("responder_mensajes"))) {
+    return NextResponse.json(
+      { error: "No tienes permiso para responder mensajes." },
+      { status: 403 },
+    );
   }
 
   // Instagram DM API: solo texto e imágenes

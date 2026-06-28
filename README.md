@@ -155,16 +155,42 @@ docker compose up --build
 
 ---
 
-## Crons requeridos
+## Crons
 
-Configura estos trabajos en **cron-job.org** (u otro servicio), con el header `Authorization: Bearer {CRON_SECRET}`:
+**CRONS EXTERNOS: NINGUNO REQUERIDO.**
 
-| # | Ruta | Frecuencia | Descripción |
-|---|---|---|---|
-| 1 | `GET /api/cron/health-check` | Cada 5 minutos | Monitor de salud y auto-recuperación de bots caídos |
-| 2 | `GET /api/cron/follow-up` | Cada 15 minutos | Motor de seguimiento automático inteligente por etapa (solo negocios plan Pro) |
+El scheduler corre **internamente** dentro del proceso de Node.js (`src/lib/scheduler.ts`,
+arrancado por `src/instrumentation.ts` con `node-cron`). No depende de cron-job.org ni de
+ningún servicio externo. Se reinicia automáticamente con la app en cada deploy/reinicio de
+EasyPanel.
 
-La variable `CRON_SECRET` debe definirse en `.env` y en EasyPanel. Si no se define, el endpoint responde con 401 a cualquier solicitud.
+| Job | Frecuencia | Descripción |
+|---|---|---|
+| `health-check` | Cada 5 minutos | Monitor de salud y auto-recuperación de bots caídos |
+| `follow-up` | Cada 15 minutos | Motor de seguimiento automático por etapa (negocios plan Pro) |
+| `campaigns` | Cada minuto | Motor de campañas (envío por pasos con lock) |
+| `weekly-summary` | Lunes 8 AM México (14:00 UTC) | Resumen semanal con IA |
+
+> El scheduler **no corre en `npm run dev`** (solo en producción) para evitar envíos reales
+> al desarrollar. Cada ejecución se registra en la tabla `cron_executions` y se ve en
+> **/admin/estado → Motor de crons**. Un claim atómico sobre esa tabla evita doble ejecución
+> si hubiera más de una réplica.
+
+**Testing manual** (los endpoints `/api/cron/*` se mantienen para esto). Header
+`Authorization: Bearer {CRON_SECRET}`:
+
+```bash
+# Correr todos los jobs:
+curl -H "Authorization: Bearer {CRON_SECRET}" \
+  https://postgres-nexcrm.d6cr6o.easypanel.host/api/cron/master
+
+# Correr solo un job:
+curl -H "Authorization: Bearer {CRON_SECRET}" \
+  https://postgres-nexcrm.d6cr6o.easypanel.host/api/cron/master?job=health-check
+```
+
+La variable `CRON_SECRET` debe definirse en `.env` y en EasyPanel. Si no se define, los
+endpoints de testing responden 401.
 
 ---
 

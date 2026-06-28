@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { hasPermission } from "@/lib/permissions";
 import { getBusinessMetrics, getEmbudoStats } from "@/lib/data";
 import { ReportesContent } from "@/components/dashboard/reportes-content";
+import { AccessDenied } from "@/components/dashboard/access-denied";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Reportes" };
@@ -24,6 +26,10 @@ export default async function ReportesPage() {
         </div>
       </div>
     );
+  }
+
+  if (!hasPermission(session.user, "ver_reportes")) {
+    return <AccessDenied mensaje="No tienes acceso a los reportes." />;
   }
 
   const [initialMetrics, initialEmbudo] = await Promise.all([

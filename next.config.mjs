@@ -3,6 +3,8 @@ const nextConfig = {
   // Build self-contained server for Docker / EasyPanel
   output: "standalone",
   experimental: {
+    // Habilita src/instrumentation.ts (en Next 14 no es default; sí en Next 15)
+    instrumentationHook: true,
     // Keep these out of the bundle so native/engine files load from node_modules at runtime
     serverComponentsExternalPackages: ["@prisma/client", "bcryptjs", "pg"],
   },

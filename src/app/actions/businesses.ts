@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createBusinessSchema, type CreateBusinessInput } from "@/lib/validations";
+import { TODOS_LOS_PERMISOS } from "@/lib/permissions";
+import { callerCan } from "@/lib/permissions-server";
 
 export type ActionResult = { ok: boolean; error?: string; id?: string };
 
@@ -122,6 +124,53 @@ export async function createBusiness(
       });
     } catch {
       // No crítico — el negocio ya fue creado
+    }
+
+    // Seed de roles por defecto
+    try {
+      const propietario = await prisma.businessRole.create({
+        data: {
+          businessId: business.id,
+          nombre: "Propietario",
+          permisos: [...TODOS_LOS_PERMISOS],
+        },
+        select: { id: true },
+      });
+      await Promise.all([
+        prisma.businessRole.create({
+          data: {
+            businessId: business.id,
+            nombre: "Agente",
+            permisos: [
+              "ver_conversaciones",
+              "responder_mensajes",
+              "gestionar_contactos",
+              "ver_embudo",
+              "mover_contactos",
+              "email_sugerencias_seguimiento",
+            ],
+          },
+        }),
+        prisma.businessRole.create({
+          data: {
+            businessId: business.id,
+            nombre: "Visor",
+            permisos: [
+              "ver_conversaciones",
+              "ver_embudo",
+              "ver_reportes",
+              "email_resumen_semanal",
+            ],
+          },
+        }),
+        // Asignar primer CLIENTE del negocio al rol Propietario
+        prisma.user.updateMany({
+          where: { businessId: business.id, rol: "CLIENTE" },
+          data: { businessRoleId: propietario.id },
+        }),
+      ]);
+    } catch {
+      // No crítico — los roles se pueden crear manualmente
     }
 
     revalidatePath("/admin/negocios");
@@ -360,6 +409,10 @@ export async function upsertContactStage(
     return { ok: false, error: "No autorizado." };
   }
 
+  if (!(await callerCan("mover_contactos"))) {
+    return { ok: false, error: "No tienes permiso para mover contactos." };
+  }
+
   try {
     // Si se asigna una etapa, validar que pertenece a este negocio.
     if (stageId !== null) {
@@ -421,6 +474,10 @@ export async function applyStageSuggestion(
   if (!session) return { ok: false, error: "No autorizado." };
   if (session.user.rol !== "ADMIN" && session.user.businessId !== businessId) {
     return { ok: false, error: "No autorizado." };
+  }
+
+  if (!(await callerCan("mover_contactos"))) {
+    return { ok: false, error: "No tienes permiso para mover contactos." };
   }
 
   try {

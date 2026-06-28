@@ -28,7 +28,7 @@ export default async function BusinessDetailPage({
 }: {
   params: { id: string };
 }) {
-  const [business, funnelStages, businessPlanData, clienteUser] = await Promise.all([
+  const [business, funnelStages, businessPlanData, teamMembers, businessRoles] = await Promise.all([
     getBusinessById(params.id),
     prisma.funnelStage.findMany({
       where: { businessId: params.id },
@@ -56,9 +56,22 @@ export default async function BusinessDetailPage({
       where: { id: params.id },
       select: { plan: true },
     }),
-    prisma.user.findFirst({
+    prisma.user.findMany({
       where: { businessId: params.id, rol: "CLIENTE" },
-      select: { id: true, nombre: true, email: true, activo: true },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        activo: true,
+        businessRoleId: true,
+        businessRole: { select: { nombre: true } },
+      },
+      orderBy: { creadoAt: "asc" },
+    }),
+    prisma.businessRole.findMany({
+      where: { businessId: params.id },
+      include: { _count: { select: { usuarios: true } } },
+      orderBy: { creadoAt: "asc" },
     }),
   ]);
 
@@ -145,7 +158,8 @@ export default async function BusinessDetailPage({
         igMsgSnippets={igMsgSnippets}
         llmPrompt={llmPrompt}
         appUrl={appUrl}
-        clienteUser={clienteUser}
+        teamMembers={teamMembers}
+        businessRoles={businessRoles}
       />
     </div>
   );

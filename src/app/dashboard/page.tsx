@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { Inbox } from "lucide-react";
 
 import { auth } from "@/auth";
+import { hasPermission } from "@/lib/permissions";
 import { Conversations } from "@/components/dashboard/conversations";
+import { AccessDenied } from "@/components/dashboard/access-denied";
 
 export const metadata: Metadata = { title: "Conversaciones" };
 export const dynamic = "force-dynamic";
@@ -28,6 +30,10 @@ export default async function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  if (!hasPermission(session.user, "ver_conversaciones")) {
+    return <AccessDenied mensaje="No tienes acceso a las conversaciones." />;
   }
 
   return <Conversations />;

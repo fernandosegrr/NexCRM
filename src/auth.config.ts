@@ -20,6 +20,7 @@ export const authConfig = {
         token.rol = user.rol;
         token.businessId = user.businessId;
         token.nombre = user.nombre;
+        token.permisos = (user as { permisos?: string[] }).permisos;
       }
       return token;
     },
@@ -29,6 +30,7 @@ export const authConfig = {
         session.user.rol = token.rol as typeof session.user.rol;
         session.user.businessId = token.businessId as string | null;
         session.user.nombre = token.nombre as string;
+        session.user.permisos = token.permisos as string[] | undefined;
       }
       return session;
     },

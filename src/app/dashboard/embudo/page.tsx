@@ -5,7 +5,9 @@ import { ArrowLeft } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { hasPermission } from "@/lib/permissions";
 import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
+import { AccessDenied } from "@/components/dashboard/access-denied";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Embudo de ventas" };
@@ -20,6 +22,10 @@ export default async function DashboardFunnelPage() {
         No tienes un negocio asignado.
       </div>
     );
+  }
+
+  if (!hasPermission(session.user, "ver_embudo")) {
+    return <AccessDenied mensaje="No tienes acceso al embudo." />;
   }
 
   const businessId = session.user.businessId;

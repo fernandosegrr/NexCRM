@@ -4,15 +4,31 @@ import { useEffect, useState, useTransition } from "react";
 import {
   BarChart2,
   Bot,
+  Check,
   Filter,
   Loader2,
+  MoreVertical,
+  Plus,
   Settings,
-  User,
+  Shield,
+  Trash2,
+  UserCog,
+  Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { setUserActivo, resetUserPassword } from "@/app/actions/users";
+import { resetUserPassword } from "@/app/actions/users";
 import { updateBusinessTablaMemoria } from "@/app/actions/businesses";
+import {
+  createBusinessRole,
+  updateBusinessRole,
+  deleteBusinessRole,
+  inviteTeamMember,
+  updateMemberRole,
+  setMemberActivo,
+  resetMemberPassword,
+} from "@/app/actions/team";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadButton } from "@/components/download-button";
@@ -28,17 +44,45 @@ import { EmbudoConversionChart } from "@/components/charts/embudo-conversion";
 import { SeguimientoStatsChart } from "@/components/charts/seguimiento-stats";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isCanal } from "@/lib/channels";
+import {
+  PERMISOS_POR_CATEGORIA,
+  PERMISO_LABELS,
+  TODOS_LOS_PERMISOS,
+  type Permiso,
+} from "@/lib/permissions";
 import type {
   FunnelStageDTO,
   BusinessMetrics,
   EmbudoStatItem,
 } from "@/lib/data";
-import { MessageSquare, Users } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +98,24 @@ type BusinessInstance = {
 };
 
 type Snippet = { inicio: string; humanReply: string; fin: string };
+
+type TeamMember = {
+  id: string;
+  nombre: string;
+  email: string;
+  activo: boolean;
+  businessRoleId: string | null;
+  businessRole: { nombre: string } | null;
+};
+
+type BusinessRoleWithCount = {
+  id: string;
+  businessId: string;
+  nombre: string;
+  permisos: string[];
+  creadoAt: Date;
+  _count: { usuarios: number };
+};
 
 export type BusinessDetailTabsProps = {
   business: {
@@ -73,7 +135,8 @@ export type BusinessDetailTabsProps = {
   igMsgSnippets: Snippet | null;
   llmPrompt: string | null;
   appUrl: string;
-  clienteUser: { id: string; nombre: string; email: string; activo: boolean } | null;
+  teamMembers: TeamMember[];
+  businessRoles: BusinessRoleWithCount[];
 };
 
 // ── SnippetBlock ──────────────────────────────────────────────────────────
@@ -330,6 +393,10 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
                   </span>
                 </div>
 
+                {i.canal === "whatsapp" && (
+                  <QrSection instanciaId={i.instanciaId} instanceDbId={i.id} />
+                )}
+
                 {(i.canal === "instagram" || i.canal === "messenger") && (
                   <MetaTokenForm
                     instanceId={i.id}
@@ -377,6 +444,139 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+// ── QR Section (dentro de ConfiguracionTab, instancias WA) ────────────────
+
+function QrSection({ instanciaId, instanceDbId }: { instanciaId: string; instanceDbId: string }) {
+  const [status, setStatus] = useState<"unknown" | "open" | "close">("unknown");
+  const [qr, setQr] = useState<string | null>(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/admin/instances/${instanceDbId}/status`)
+      .then((r) => r.json())
+      .then((d: { status: string }) => {
+        // Evolution devuelve "open" cuando la sesión está activa.
+        setStatus(d.status === "open" ? "open" : "close");
+      })
+      .catch(() => setStatus("unknown"));
+  }, [instanceDbId]);
+
+  useEffect(() => {
+    if (!open || status === "open") return;
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/admin/instances/${instanceDbId}/status`);
+        const d = await r.json() as { status: string };
+        if (d.status === "open") {
+          setStatus("open");
+          setOpen(false);
+          toast.success("¡WhatsApp conectado exitosamente!");
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [open, status, instanceDbId]);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  async function generateQr() {
+    setLoadingQr(true);
+    setQr(null);
+    try {
+      const r = await fetch(`/api/admin/instances/${instanceDbId}/qr`, { method: "POST" });
+      const d = await r.json() as { qr?: string; connected?: boolean; error?: string };
+      if (d.connected) {
+        setStatus("open");
+        toast.success("La instancia ya está conectada.");
+        setOpen(false);
+      } else if (d.qr) {
+        setQr(d.qr);
+        setCountdown(30);
+      } else {
+        toast.error(d.error ?? "No se pudo obtener el QR.");
+      }
+    } catch {
+      toast.error("Error al generar el QR.");
+    } finally {
+      setLoadingQr(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 border-t border-border pt-3">
+      <span className="text-xs text-muted-foreground">Estado:</span>
+      {status === "open" ? (
+        <span className="text-xs font-medium text-emerald-400">🟢 Conectado</span>
+      ) : status === "close" ? (
+        <span className="text-xs font-medium text-red-400">🔴 Desconectado</span>
+      ) : (
+        <span className="text-xs text-muted-foreground">Verificando…</span>
+      )}
+
+      {status !== "open" && (
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={() => { setOpen(true); generateQr(); }}>
+              Generar QR
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[380px] sm:w-[420px]">
+            <SheetHeader>
+              <SheetTitle>Conectar WhatsApp</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6 flex flex-col items-center gap-6">
+              <p className="text-sm text-muted-foreground text-center">
+                Abre WhatsApp en tu teléfono → <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong>
+              </p>
+
+              {loadingQr && (
+                <div className="flex h-48 w-48 items-center justify-center">
+                  <Loader2 className="size-10 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {qr && !loadingQr && (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={`data:image/png;base64,${qr}`}
+                    alt="Código QR de WhatsApp"
+                    className="h-48 w-48 rounded-lg border border-border"
+                  />
+                  {countdown > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Expira en <strong className="text-foreground">{countdown}s</strong>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-destructive">QR expirado</p>
+                  )}
+                </div>
+              )}
+
+              <Button
+                onClick={generateQr}
+                disabled={loadingQr || countdown > 0}
+                variant="outline"
+                size="sm"
+              >
+                {loadingQr ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                Regenerar QR
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -511,137 +711,433 @@ function BotTab({
   );
 }
 
-// ── Tab Usuario ───────────────────────────────────────────────────────────
+// ── Tab Equipo ────────────────────────────────────────────────────────────
 
-function UsuarioTab({
-  clienteUser,
+function RoleDrawer({
+  businessId,
+  role,
+  onDone,
 }: {
-  clienteUser: BusinessDetailTabsProps["clienteUser"];
+  businessId: string;
+  role?: BusinessRoleWithCount;
+  onDone: () => void;
 }) {
-  const [activo, setActivo] = useState(clienteUser?.activo ?? false);
-  const [showPwForm, setShowPwForm] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
+  const [open, setOpen] = useState(false);
+  const [nombre, setNombre] = useState(role?.nombre ?? "");
+  const [selectedPermisos, setSelectedPermisos] = useState<Set<string>>(
+    new Set(role?.permisos ?? []),
+  );
   const [pending, start] = useTransition();
 
-  if (!clienteUser) {
-    return (
-      <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-        <p className="text-sm text-muted-foreground">Sin usuario cliente asignado</p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Ve a{" "}
-          <a
-            href="/admin/usuarios"
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            Usuarios
-          </a>{" "}
-          para crear uno y asignarlo a este negocio.
-        </p>
-      </div>
-    );
+  function togglePermiso(p: string) {
+    setSelectedPermisos((prev) => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
   }
 
-  function toggleActivo() {
+  function handleOpen(v: boolean) {
+    if (v) {
+      setNombre(role?.nombre ?? "");
+      setSelectedPermisos(new Set(role?.permisos ?? []));
+    }
+    setOpen(v);
+  }
+
+  function handleSubmit() {
     start(async () => {
-      const newVal = !activo;
-      const r = await setUserActivo(clienteUser!.id, newVal);
+      const data = { nombre, permisos: Array.from(selectedPermisos) };
+      const r = role
+        ? await updateBusinessRole(role.id, data)
+        : await createBusinessRole(businessId, data);
       if (r.ok) {
-        setActivo(newVal);
-        toast.success(newVal ? "Usuario activado." : "Usuario desactivado.");
+        toast.success(role ? "Rol actualizado." : "Rol creado.");
+        setOpen(false);
+        onDone();
+      } else {
+        toast.error(r.error ?? "No se pudo guardar el rol.");
+      }
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={handleOpen}>
+      <SheetTrigger asChild>
+        {role ? (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
+            Editar
+          </DropdownMenuItem>
+        ) : (
+          <Button size="sm" variant="outline">
+            <Plus className="size-4 mr-1.5" /> Nuevo rol
+          </Button>
+        )}
+      </SheetTrigger>
+      <SheetContent side="right" className="w-[420px] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{role ? "Editar rol" : "Nuevo rol"}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="role-nombre">Nombre del rol</Label>
+            <Input
+              id="role-nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="ej: Supervisor"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm font-medium">Permisos</p>
+            {Object.entries(PERMISOS_POR_CATEGORIA).map(([cat, permisos]) => (
+              <div key={cat} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {cat}
+                </p>
+                {permisos.map((p) => (
+                  <div key={p} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={p}
+                      checked={selectedPermisos.has(p)}
+                      onCheckedChange={() => togglePermiso(p)}
+                    />
+                    <Label htmlFor={p} className="text-sm font-normal cursor-pointer">
+                      {PERMISO_LABELS[p as Permiso]}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={pending || !nombre.trim()}
+            className="w-full"
+          >
+            {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+            {role ? "Guardar cambios" : "Crear rol"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MemberDrawer({
+  businessId,
+  member,
+  roles,
+  onDone,
+}: {
+  businessId: string;
+  member?: TeamMember;
+  roles: BusinessRoleWithCount[];
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [nombre, setNombre] = useState(member?.nombre ?? "");
+  const [email, setEmail] = useState(member?.email ?? "");
+  const [password, setPassword] = useState("");
+  const [roleId, setRoleId] = useState(member?.businessRoleId ?? "");
+  const [pending, start] = useTransition();
+
+  function handleSubmit() {
+    start(async () => {
+      if (!member) {
+        const r = await inviteTeamMember(businessId, {
+          nombre,
+          email,
+          password,
+          businessRoleId: roleId,
+        });
+        if (r.ok) {
+          toast.success("Miembro agregado.");
+          setOpen(false);
+          onDone();
+        } else {
+          toast.error(r.error ?? "No se pudo agregar el miembro.");
+        }
+      }
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        {member ? (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
+            Cambiar contraseña
+          </DropdownMenuItem>
+        ) : (
+          <Button size="sm" variant="outline">
+            <Plus className="size-4 mr-1.5" /> Agregar miembro
+          </Button>
+        )}
+      </SheetTrigger>
+      <SheetContent side="right" className="w-[400px]">
+        <SheetHeader>
+          <SheetTitle>{member ? "Cambiar contraseña" : "Agregar miembro"}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-4">
+          {!member && (
+            <>
+              <div className="space-y-2">
+                <Label>Nombre</Label>
+                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Juan Pérez" />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@empresa.com" />
+              </div>
+            </>
+          )}
+          <div className="space-y-2">
+            <Label>{member ? "Nueva contraseña" : "Contraseña temporal"}</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              autoComplete="new-password"
+            />
+          </div>
+          {!member && (
+            <div className="space-y-2">
+              <Label>Rol</Label>
+              <Select value={roleId} onValueChange={setRoleId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button
+            onClick={member ? async () => {
+              start(async () => {
+                const r = await resetMemberPassword(member.id, password);
+                if (r.ok) { toast.success("Contraseña actualizada."); setOpen(false); onDone(); }
+                else toast.error(r.error ?? "No se pudo cambiar.");
+              });
+            } : handleSubmit}
+            disabled={pending || password.length < 6 || (!member && (!nombre || !email || !roleId))}
+            className="w-full"
+          >
+            {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+            {member ? "Guardar contraseña" : "Agregar miembro"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function EquipoTab({
+  businessId,
+  initialMembers,
+  initialRoles,
+}: {
+  businessId: string;
+  initialMembers: TeamMember[];
+  initialRoles: BusinessRoleWithCount[];
+}) {
+  const [members, setMembers] = useState(initialMembers);
+  const [roles, setRoles] = useState(initialRoles);
+  const [pending, start] = useTransition();
+
+  async function refresh() {
+    // Revalidación pasa por revalidatePath del server action; forzar reload de la sección
+    window.location.reload();
+  }
+
+  function handleDeleteRole(roleId: string) {
+    start(async () => {
+      const r = await deleteBusinessRole(roleId);
+      if (r.ok) {
+        toast.success("Rol eliminado.");
+        setRoles((prev) => prev.filter((r) => r.id !== roleId));
+      } else {
+        toast.error(r.error ?? "No se pudo eliminar.");
+      }
+    });
+  }
+
+  function handleToggleMember(userId: string, activo: boolean) {
+    start(async () => {
+      const r = await setMemberActivo(userId, activo);
+      if (r.ok) {
+        toast.success(activo ? "Usuario activado." : "Usuario desactivado.");
+        setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, activo } : m));
       } else {
         toast.error(r.error ?? "No se pudo actualizar.");
       }
     });
   }
 
-  function changePassword() {
-    start(async () => {
-      const r = await resetUserPassword(clienteUser!.id, newPassword);
-      if (r.ok) {
-        toast.success("Contraseña actualizada.");
-        setNewPassword("");
-        setShowPwForm(false);
-      } else {
-        toast.error(r.error ?? "No se pudo cambiar la contraseña.");
-      }
-    });
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <User className="size-4" />
-            </div>
-            <div>
-              <p className="font-medium leading-none">{clienteUser.nombre}</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{clienteUser.email}</p>
-            </div>
+    <div className="space-y-10">
+      {/* Sección Roles */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Roles</h2>
+            <p className="text-sm text-muted-foreground">
+              Define los permisos de cada tipo de usuario.
+            </p>
           </div>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              activo
-                ? "bg-emerald-500/15 text-emerald-400"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {activo ? "Activo" : "Inactivo"}
-          </span>
+          <RoleDrawer businessId={businessId} onDone={refresh} />
         </div>
 
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowPwForm(!showPwForm)}
-          >
-            Cambiar contraseña
-          </Button>
-          <Button
-            size="sm"
-            variant={activo ? "destructive" : "outline"}
-            onClick={toggleActivo}
-            disabled={pending}
-          >
-            {pending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : activo ? (
-              "Desactivar acceso"
-            ) : (
-              "Activar acceso"
-            )}
-          </Button>
-        </div>
-
-        {showPwForm && (
-          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-            <Label htmlFor="new-password">Nueva contraseña</Label>
-            <div className="flex gap-2">
-              <Input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-                autoComplete="new-password"
-              />
-              <Button
-                size="sm"
-                onClick={changePassword}
-                disabled={pending || newPassword.length < 6}
-              >
-                {pending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  "Guardar"
-                )}
-              </Button>
-            </div>
+        {roles.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+            Sin roles creados. Crea el primero.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {roles.map((role) => {
+              const preview = role.permisos.slice(0, 3);
+              const extra = role.permisos.length - 3;
+              return (
+                <div
+                  key={role.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                >
+                  <Shield className="size-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{role.nombre}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {role._count.usuarios} usuario{role._count.usuarios !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {preview.map((p) => (
+                      <Badge key={p} variant="secondary" className="text-[10px]">
+                        {PERMISO_LABELS[p as Permiso] ?? p}
+                      </Badge>
+                    ))}
+                    {extra > 0 && (
+                      <Badge variant="muted" className="text-[10px]">
+                        y {extra} más
+                      </Badge>
+                    )}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="size-8 shrink-0">
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <RoleDrawer businessId={businessId} role={role} onDone={refresh} />
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        disabled={role._count.usuarios > 0 || pending}
+                        onSelect={() => handleDeleteRole(role.id)}
+                      >
+                        <Trash2 className="size-4 mr-2" />
+                        Eliminar
+                        {role._count.usuarios > 0 && (
+                          <span className="ml-2 text-muted-foreground text-xs">(con usuarios)</span>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
+
+      {/* Sección Miembros */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Miembros</h2>
+            <p className="text-sm text-muted-foreground">
+              Usuarios con acceso al dashboard de este negocio.
+            </p>
+          </div>
+          <MemberDrawer businessId={businessId} roles={roles} onDone={refresh} />
+        </div>
+
+        {members.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+            Sin miembros. Agrega el primero.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {members.map((m) => {
+              const initial = m.nombre.charAt(0).toUpperCase();
+              return (
+                <div
+                  key={m.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                    {initial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{m.nombre}</p>
+                    <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {m.businessRole && (
+                      <Badge variant="secondary" className="text-xs">
+                        {m.businessRole.nombre}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={m.activo ? "success" : "muted"}
+                      className="text-[10px]"
+                    >
+                      {m.activo ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="size-8 shrink-0">
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <MemberDrawer
+                        businessId={businessId}
+                        member={m}
+                        roles={roles}
+                        onDone={refresh}
+                      />
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={pending}
+                        onSelect={() => handleToggleMember(m.id, !m.activo)}
+                        className={!m.activo ? "" : "text-destructive focus:text-destructive"}
+                      >
+                        {m.activo ? (
+                          <><X className="size-4 mr-2" />Desactivar acceso</>
+                        ) : (
+                          <><Check className="size-4 mr-2" />Activar acceso</>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -656,7 +1152,8 @@ export function BusinessDetailTabs({
   igMsgSnippets,
   llmPrompt,
   appUrl,
-  clienteUser,
+  teamMembers,
+  businessRoles,
 }: BusinessDetailTabsProps) {
   return (
     <Tabs defaultValue="resumen" className="w-full">
@@ -677,9 +1174,9 @@ export function BusinessDetailTabs({
           <Bot className="size-4" />
           Bot / n8n
         </TabsTrigger>
-        <TabsTrigger value="usuario">
-          <User className="size-4" />
-          Usuario
+        <TabsTrigger value="equipo">
+          <Users className="size-4" />
+          Equipo
         </TabsTrigger>
       </TabsList>
 
@@ -718,8 +1215,12 @@ export function BusinessDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="usuario">
-        <UsuarioTab clienteUser={clienteUser} />
+      <TabsContent value="equipo">
+        <EquipoTab
+          businessId={business.id}
+          initialMembers={teamMembers}
+          initialRoles={businessRoles}
+        />
       </TabsContent>
     </Tabs>
   );

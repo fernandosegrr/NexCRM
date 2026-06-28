@@ -28,6 +28,9 @@ model Business {
   usuarios     User[]
   mensajes     Message[]
   etapas       FunnelStage[]
+  roles        BusinessRole[]
+  campos       CustomField[]
+  campanas     Campaign[]
 
   @@map("businesses")
 }
@@ -53,15 +56,17 @@ model BusinessInstance {
 }
 
 model User {
-  id         String    @id @default(uuid())
-  email      String    @unique
-  password   String // bcrypt hash
-  nombre     String
-  rol        Role
-  activo     Boolean   @default(true)
-  businessId String? // null si ADMIN
-  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
-  creadoAt   DateTime  @default(now())
+  id             String        @id @default(uuid())
+  email          String        @unique
+  password       String // bcrypt hash
+  nombre         String
+  rol            Role
+  activo         Boolean       @default(true)
+  businessId     String? // null si ADMIN
+  business       Business?     @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  businessRoleId String?
+  businessRole   BusinessRole? @relation(fields: [businessRoleId], references: [id], onDelete: SetNull)
+  creadoAt       DateTime      @default(now())
 
   @@index([businessId])
   @@map("users")
@@ -107,15 +112,18 @@ model AuditLog {
 }
 
 model Contact {
-  id          String         @id @default(uuid())
+  id          String              @id @default(uuid())
   uidUsuario  String
   instanciaId String
   canal       String
   nombre      String?
   username    String?
   fotoPerfil  String?
-  resolvedAt  DateTime       @default(now())
+  resolvedAt  DateTime            @default(now())
   etapas      ContactStage[]
+  notas       ContactNote[]
+  etiquetas   ContactTag[]
+  camposCustom ContactFieldValue[]
 
   // Sugerencia de etapa generada por IA (clasificador del embudo)
   sugerenciaStageId String?
@@ -213,4 +221,125 @@ model FollowUpLog {
   @@index([businessId])
   @@index([creadoAt(sort: Desc)])
   @@map("follow_up_logs")
+}
+
+// ───────────────────────────────────────────────────────────
+// FASE FINAL — Roles, Contactos enriquecidos, Campañas
+// ───────────────────────────────────────────────────────────
+
+model BusinessRole {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombre     String
+  permisos   String[]
+  creadoAt   DateTime @default(now())
+  usuarios   User[]
+
+  @@unique([businessId, nombre])
+  @@map("business_roles")
+}
+
+model ContactNote {
+  id         String   @id @default(uuid())
+  contactId  String
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  businessId String
+  contenido  String
+  creadoPor  String
+  creadoAt   DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_notes")
+}
+
+model ContactTag {
+  id         String  @id @default(uuid())
+  contactId  String
+  contact    Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  businessId String
+  etiqueta   String
+
+  @@unique([contactId, businessId, etiqueta])
+  @@map("contact_tags")
+}
+
+model CustomField {
+  id         String              @id @default(uuid())
+  businessId String
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombre     String
+  tipo       String // 'texto'|'numero'|'fecha'|'select'
+  opciones   String[]
+  orden      Int                 @default(0)
+  creadoAt   DateTime            @default(now())
+  valores    ContactFieldValue[]
+
+  @@index([businessId])
+  @@map("custom_fields")
+}
+
+model ContactFieldValue {
+  id        String      @id @default(uuid())
+  contactId String
+  contact   Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  fieldId   String
+  field     CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  valor     String
+
+  @@unique([contactId, fieldId])
+  @@map("contact_field_values")
+}
+
+model Campaign {
+  id             String        @id @default(uuid())
+  businessId     String
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nombre         String
+  mensaje        String
+  canal          String // 'whatsapp'|'instagram'|'messenger'
+  estado         String        @default("borrador") // 'borrador'|'enviando'|'completada'|'cancelada'
+  filtroEtapa    String?
+  instanciaId    String?
+  totalContactos Int           @default(0)
+  enviados       Int           @default(0)
+  fallidos       Int           @default(0)
+  contactoActual Int           @default(0)
+  procesando     Boolean       @default(false)
+  delayMin       Int           @default(8)
+  delayMax       Int           @default(20)
+  riesgoAceptado Boolean       @default(false)
+  creadoAt       DateTime      @default(now())
+  iniciadoAt     DateTime?
+  completadoAt   DateTime?
+  logs           CampaignLog[]
+
+  @@index([businessId])
+  @@index([estado])
+  @@map("campaigns")
+}
+
+model CampaignLog {
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  uidUsuario String
+  estado     String // 'enviado'|'fallido'
+  error      String?
+  enviadoAt  DateTime @default(now())
+
+  @@index([campaignId])
+  @@map("campaign_logs")
+}
+
+// Registro de ejecuciones del scheduler interno (node-cron). El id es el nombre
+// del job: 'health-check'|'follow-up'|'weekly-summary'|'campaigns'.
+// ultimaEjecucion también actúa como lock de claim atómico anti-doble-ejecución.
+model CronExecution {
+  id              String    @id
+  ultimaEjecucion DateTime?
+  ultimoEstado    String? // 'ok'|'error'
+  ultimoResultado String? // JSON del resultado
+
+  @@map("cron_executions")
 }
