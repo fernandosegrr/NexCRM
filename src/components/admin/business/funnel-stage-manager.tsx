@@ -74,14 +74,14 @@ const DEFAULT_FOLLOWUP: FollowUpState = {
 function mensajePlaceholder(stageName: string): string {
   const n = stageName.toLowerCase();
   if (n.includes("nuevo") || n.includes("lead"))
-    return "¡Hola! Vi que nos escribiste, ¿en qué te podemos ayudar? 😊";
+    return "Ej: Pregunta cómo podemos ayudarles y ofrece información inicial. Tono amigable y sin presión.";
   if (n.includes("interesado"))
-    return "Hola, ¿pudiste revisar la información que te compartimos?";
+    return "Ej: Pregunta si pudo revisar la información y ofrece resolver dudas. Tono cercano.";
   if (n.includes("negociaci"))
-    return "Hola, ¿tuviste oportunidad de revisar la cotización?";
+    return "Ej: Pregunta si tuvo oportunidad de revisar la cotización. Tono profesional pero cálido.";
   if (n.includes("cerrar") || n.includes("cierre"))
-    return "¡Hola! ¿Podemos proceder? Tenemos disponibilidad esta semana 😊";
-  return "Hola, ¿pudiste revisar la información que te enviamos?";
+    return "Ej: Pregunta si están listos para proceder y menciona la disponibilidad. Crear urgencia amable.";
+  return "Ej: Pregunta si pudo revisar la información enviada. Tono amigable y directo.";
 }
 
 // ── Stage form dialog ────────────────────────────────────────────────────
@@ -182,9 +182,9 @@ function StageDialog({
             </p>
           </div>
 
-          {/* Mensaje de seguimiento */}
+          {/* Guía de tono */}
           <div className="space-y-1.5">
-            <Label htmlFor="stage-msg">Mensaje de seguimiento</Label>
+            <Label htmlFor="stage-msg">Guía de tono para el seguimiento</Label>
             <Textarea
               id="stage-msg"
               value={mensaje}
@@ -193,7 +193,7 @@ function StageDialog({
               rows={2}
             />
             <p className="text-[11px] text-muted-foreground">
-              El mensaje se enviará tal cual. Evita mencionar que es automático.
+              La IA usará esto como guía para generar un mensaje personalizado según la conversación de cada contacto. Si lo dejas vacío, la IA generará algo apropiado para la etapa automáticamente.
             </p>
           </div>
 

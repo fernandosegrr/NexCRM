@@ -40,7 +40,7 @@ export default async function DashboardLayout({
   return (
     <Providers session={session}>
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
+      <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
         <Logo showText={false} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-tight">

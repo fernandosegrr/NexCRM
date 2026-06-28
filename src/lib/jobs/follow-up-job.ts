@@ -20,6 +20,7 @@ type ProcessResult = {
 type AIResponse = {
   enviar: boolean;
   razon: string;
+  mensajeGenerado: string | null;
   etapaDetectada: string;
   cambioEtapa: boolean;
 };
@@ -197,48 +198,71 @@ async function processContact(params: {
       .map((e) => `- ${e.nombre}${e.descripcion ? `: ${e.descripcion}` : ""}`)
       .join("\n");
 
-    const systemPrompt = `Eres un analista de ventas experto en PyMEs mexicanas que venden por WhatsApp, Instagram y Messenger.
+    const contactDisplayName = contact.nombre ?? contact.uidUsuario;
+    const guiaTono = stage.mensajeSeguimiento ?? "Mensaje amigable y directo";
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgContext = lastMsg
+      ? `Último mensaje: ROL=${lastMsg.rol.toUpperCase()} — ${lastMsg.contenido?.trim() || `[${lastMsg.enviadoAt.toLocaleDateString("es-MX")}]`}`
+      : "";
 
-Tu único trabajo es analizar una conversación y determinar si vale la pena enviar un mensaje de seguimiento al prospecto.
+    const systemPrompt = `Eres un experto en ventas conversacionales para PyMEs mexicanas.
+Analizas conversaciones de WhatsApp/Instagram/Messenger y decides si vale la pena hacer seguimiento. Si sí, generas un mensaje personalizado y natural.
 
 Negocio: ${business.nombre}
 Etapa actual: ${stage.nombre}
-Tiempo sin respuesta del usuario: ${Math.round(minutesSinceLast)} minutos
+Nombre del contacto: ${contactDisplayName}
 Canal: ${contact.canal}
+Tiempo sin respuesta: ${Math.round(minutesSinceLast)} minutos
 
-Etapas del embudo (para contexto):
+Etapas del embudo:
 ${etapasLista}
 
-Responde ÚNICAMENTE con JSON válido sin texto adicional ni backticks:
+Guía de tono/estilo (definida por el negocio):
+"${guiaTono}"
+
+REGLA CRÍTICA — cambios de etapa:
+Solo sugiere cambioEtapa=true si el ÚLTIMO mensaje del historial es del USUARIO (rol='user'). Si el último mensaje es del bot/agente, el usuario no ha reaccionado — cambioEtapa=false siempre.
+
+Responde ÚNICAMENTE con JSON válido sin texto adicional:
 {
   "enviar": true | false,
-  "razon": "explicación breve máximo 100 caracteres en español",
-  "etapaDetectada": "nombre exacto de la etapa donde está el contacto",
+  "razon": "explicación breve máximo 100 chars en español",
+  "mensajeGenerado": "mensaje personalizado en español mexicano, natural y conversacional, máximo 300 chars. null si enviar=false",
+  "etapaDetectada": "nombre exacto de la etapa actual",
   "cambioEtapa": true | false
 }
 
-Enviar=true cuando:
-- El usuario mostró intención real (preguntó precio, disponibilidad, cómo comprar)
-- La conversación quedó inconclusa (había algo pendiente de responder)
-- No hay señales de rechazo explícito
-- El tiempo de inactividad es razonable para la etapa
+Para mensajeGenerado cuando enviar=true:
+- Usar el nombre del contacto si está disponible
+- Referenciar algo específico de la conversación (producto preguntado, fecha mencionada, duda específica)
+- Tono: amigable, informal, mexicano
+- NO mencionar que es automático
+- NO ser genérico — debe sentirse como si un humano lo escribió
+- Máximo 300 caracteres
+- Máximo 1 emoji relevante
+- Respetar el tono/estilo de la guía del negocio
 
-Enviar=false cuando:
-- El usuario se despidió o rechazó explícitamente
-- La conversación fue solo curiosidad sin intención de compra
-- La consulta ya se resolvió completamente
-- El último mensaje fue del bot/agente, no del usuario
-- El historial está vacío o es insuficiente para evaluar`;
+Criterios para enviar=true:
+- Usuario mostró intención real (precio, disponibilidad, cómo comprar)
+- Conversación quedó inconclusa
+- No hay rechazo explícito
+- Tiempo de inactividad razonable para la etapa
 
-    const userPrompt = `Historial de conversación:\n${historial}\n\nMensaje de seguimiento configurado para esta etapa:\n"${stage.mensajeSeguimiento ?? ""}"\n\n¿Vale la pena enviar este seguimiento?`;
+Criterios para enviar=false:
+- Usuario rechazó explícitamente
+- Solo curiosidad sin intención de compra
+- Consulta ya resuelta completamente
+- Último mensaje fue del bot/agente`;
+
+    const userPrompt = `Historial de conversación (más antiguo → más reciente):\n${historial}\n\n${lastMsgContext}\n\nGuía de tono del negocio: "${guiaTono}"\n\nGenera el análisis y el mensaje personalizado si aplica.`;
 
     let aiResponse: AIResponse;
     try {
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        max_tokens: 200,
-        temperature: 0.1,
+        max_tokens: 600,
+        temperature: 0.4,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -257,7 +281,12 @@ Enviar=false cuando:
       return { contactId: contact.id, decision: "ia_descarto", razonIA: aiResponse.razon, etapaDetectada: aiResponse.etapaDetectada };
     }
 
-    const mensajeEnviado = stage.mensajeSeguimiento ?? "";
+    // Usar mensaje generado por IA; si no, caer en la guía de tono como fallback
+    const mensajeEnviado = aiResponse.mensajeGenerado ?? stage.mensajeSeguimiento ?? null;
+    if (!mensajeEnviado) {
+      await prisma.followUpLog.create({ data: { ...logBase, decision: "ia_descarto", razonIA: "Sin mensaje disponible", etapaDetectada: aiResponse.etapaDetectada } });
+      return { contactId: contact.id, decision: "ia_descarto", razonIA: "Sin mensaje disponible", etapaDetectada: aiResponse.etapaDetectada };
+    }
 
     if (config.modoEnvio === "manual") {
       const log = await prisma.followUpLog.create({
@@ -305,11 +334,6 @@ Enviar=false cuando:
     }
 
     // Modo automático: enviar
-    if (!mensajeEnviado) {
-      await prisma.followUpLog.create({ data: { ...logBase, decision: "error", razonIA: "Sin mensaje de seguimiento configurado" } });
-      return { contactId: contact.id, decision: "error", razonIA: "Sin mensaje configurado" };
-    }
-
     try {
       if (contact.canal === "whatsapp") {
         await sendWhatsApp(contact.instanciaId, contact.uidUsuario, mensajeEnviado);

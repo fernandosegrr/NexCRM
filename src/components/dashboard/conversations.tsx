@@ -419,7 +419,7 @@ export function Conversations() {
   // Kanban view (full width, no conversation panel alongside)
   if (viewMode === "kanban" && !loading && !error) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex shrink-0 items-center gap-2 border-b border-border p-3">
           <div className="relative flex-1">
@@ -466,7 +466,7 @@ export function Conversations() {
 
         {/* Conversation overlay when a card is clicked */}
         {selected && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="absolute inset-0 z-40 flex flex-col bg-background">
             <ConversationView
               key={`${selected.instanciaId}::${selected.uidUsuario}`}
               contact={selected}
@@ -576,7 +576,11 @@ export function Conversations() {
                       <p className="text-muted-foreground text-[11px]">IA: {s.razonIA}</p>
                     )}
                     {s.mensajeEnviado && (
-                      <p className="rounded bg-muted px-2 py-1 text-[11px] leading-relaxed">{s.mensajeEnviado}</p>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] font-medium text-muted-foreground">Mensaje generado por IA:</p>
+                        <p className="rounded bg-muted px-2 py-1 text-[11px] leading-relaxed">{s.mensajeEnviado}</p>
+                        <p className="text-[10px] text-violet-500">✨ Generado por IA · puedes editarlo antes de aprobar</p>
+                      </div>
                     )}
                     <div className="flex gap-1.5 pt-0.5">
                       <button

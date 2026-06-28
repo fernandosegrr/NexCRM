@@ -675,10 +675,11 @@ export function buildSuggestionHtml({
       <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">An&aacute;lisis de la IA:</p>
       <p style="margin:0 0 20px;font-size:14px;color:#374151;font-style:italic;">&ldquo;${razonIA}&rdquo;</p>
 
-      <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Mensaje que se enviar&iacute;a:</p>
-      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:16px;margin-bottom:28px;">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Mensaje generado por IA:</p>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:16px;margin-bottom:8px;">
         <p style="margin:0;font-size:15px;color:#0c4a6e;line-height:1.5;">${mensajeEnviado}</p>
       </div>
+      <p style="margin:0 0 20px;font-size:11px;color:#6366f1;">✨ Mensaje generado por IA &middot; personalizado seg&uacute;n la conversaci&oacute;n &middot; puedes editarlo al aprobar</p>
 
       <table cellpadding="0" cellspacing="0" style="width:100%;">
         <tr>

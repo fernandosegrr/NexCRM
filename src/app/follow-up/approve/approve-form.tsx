@@ -123,8 +123,11 @@ export function ApproveForm({ log }: { log: LogData }) {
       )}
 
       {/* Mensaje editable */}
-      <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-        Mensaje a enviar (editable):
+      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#374151" }}>
+        Mensaje generado por IA (editable):
+      </p>
+      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6366f1" }}>
+        ✨ Este mensaje fue generado por IA basándose en la conversación. Puedes editarlo antes de enviarlo.
       </p>
       <textarea
         value={mensaje}
