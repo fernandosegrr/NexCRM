@@ -70,29 +70,11 @@ async function auditLog(data: {
   }
 }
 
-/** Convierte un jpegThumbnail de Evolution API a base64 limpio.
- *  Acepta string (base64 directo) u objeto con keys numéricas (Buffer serializado). */
-function toBase64String(raw: unknown): string | null {
+/** Limpia el string base64 de body.data.message.base64 (Evolution API). */
+function toBase64String(raw: string | null | undefined): string | null {
   if (!raw) return null;
-
-  if (typeof raw === "string") {
-    const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
-    return cleaned.length > 0 ? cleaned : null;
-  }
-
-  if (typeof raw === "object") {
-    try {
-      const bufferObj = raw as Record<string, number>;
-      const values = Object.keys(bufferObj)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => bufferObj[k]);
-      return Buffer.from(values).toString("base64");
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
+  return cleaned.length > 0 ? cleaned : null;
 }
 
 export const runtime = "nodejs";
