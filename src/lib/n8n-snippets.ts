@@ -74,6 +74,9 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
         ["uidUsuario", "={{ $('Webhook').item.json.body.data.key.remoteJid?.split('@')[0] ?? '' }}"],
         ["rol", "human"],
         ["contenido", "={{ $('Webhook').item.json.body.data.message.conversation ?? $('Webhook').item.json.body.data.message.extendedTextMessage?.text ?? '' }}"],
+        ["tipoMedia", "={{ $('Webhook').item.json.body.data.messageType }}"],
+        ["mediaBase64", "={{ $('Webhook').item.json.body.data.message.base64 ?? '' }}"],
+        ["mediaMimetype", "={{ $('Webhook').item.json.body.data.message.imageMessage?.mimetype ?? $('Webhook').item.json.body.data.message.videoMessage?.mimetype ?? '' }}"],
       ],
       320,
     );
