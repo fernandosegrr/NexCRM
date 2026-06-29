@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 
 import type { ConversationContact, MessageDTO } from "@/lib/data";
+import { normalizeTipoMedia } from "@/lib/data";
 import { applyStageSuggestion, dismissStageSuggestion } from "@/app/actions/businesses";
 import {
   createContactNote,
@@ -56,9 +57,12 @@ function MessageMedia({
   mediaUrl: string | null;
   dark: boolean;
 }) {
-  if (!mediaUrl || tipoMedia === "text") return null;
+  // Normaliza nombres crudos del webhook WA (imageMessage, stickerMessage, etc.)
+  // para que funcionen tanto mensajes nuevos como datos históricos.
+  const type = normalizeTipoMedia(tipoMedia);
+  if (!mediaUrl || type === "text") return null;
 
-  if (tipoMedia === "image") {
+  if (type === "image") {
     return (
       <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -70,7 +74,7 @@ function MessageMedia({
       </a>
     );
   }
-  if (tipoMedia === "video") {
+  if (type === "video") {
     return (
       <video
         src={mediaUrl}
@@ -79,7 +83,7 @@ function MessageMedia({
       />
     );
   }
-  if (tipoMedia === "audio") {
+  if (type === "audio") {
     return <audio src={mediaUrl} controls className="mb-1 w-full" />;
   }
   // document u otro

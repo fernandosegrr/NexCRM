@@ -12,7 +12,9 @@
             { "name": "canal", "value": "messenger" },
             { "name": "uidUsuario", "value": "={{ $('Webhook').item.json.body.entry[0].messaging[0].recipient.id }}" },
             { "name": "rol", "value": "page" },
-            { "name": "contenido", "value": "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? '' }}" }
+            { "name": "contenido", "value": "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? null }}" },
+            { "name": "tipoMedia", "value": "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}" },
+            { "name": "mediaMetaUrl", "value": "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}" }
           ]
         },
         "options": {}

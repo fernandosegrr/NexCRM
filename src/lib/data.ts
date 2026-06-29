@@ -17,6 +17,34 @@ export type MessageDTO = {
   latenciaMs: number | null;
 };
 
+/**
+ * Normaliza los nombres de tipoMedia que pueden llegar crudos del webhook de WhatsApp
+ * (imageMessage, stickerMessage, etc.) al formato que espera el renderer del chat
+ * (image, video, audio, document).
+ * Idempotente: si ya está normalizado lo devuelve tal cual.
+ */
+export function normalizeTipoMedia(raw: string | null | undefined): string {
+  if (!raw) return "text";
+  switch (raw) {
+    case "imageMessage":
+    case "stickerMessage":
+    case "image":
+      return "image";
+    case "videoMessage":
+    case "video":
+      return "video";
+    case "audioMessage":
+    case "audio":
+      return "audio";
+    case "documentMessage":
+    case "file":
+    case "document":
+      return "document";
+    default:
+      return raw;
+  }
+}
+
 /** Extrae la URL del medio guardada en metadata.url (si existe). */
 function extractMediaUrl(metadata: unknown): string | null {
   if (metadata && typeof metadata === "object" && "url" in metadata) {
@@ -167,6 +195,7 @@ export async function getBusinessById(id: string) {
     plan: b.plan,
     tablaMemoria: b.tablaMemoria,
     modoClasificacion: b.modoClasificacion,
+    buscarMediaEvolution: b.buscarMediaEvolution,
     creadoAt: b.creadoAt.toISOString(),
     instancias: b.instancias.map((i) => ({
       id: i.id,

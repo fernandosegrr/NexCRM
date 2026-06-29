@@ -6,7 +6,7 @@
         "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.instance }}\",\n  \"canal\": \"whatsapp\",\n  \"uidUsuario\": \"{{ $('numero_combinado').item.json.numero_whatsapp }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code1').item.json.mensaje_usuario }}\",\n  \"tipoMedia\": \"{{ $('Webhook').item.json.body.data.messageType }}\"\n}",
+        "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.instance }}\",\n  \"canal\": \"whatsapp\",\n  \"uidUsuario\": \"{{ $('numero_combinado').item.json.numero_whatsapp }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code1').item.json.mensaje_usuario }}\",\n  \"tipoMedia\": \"{{ $('Webhook').item.json.body.data.messageType }}\",\n  \"mediaBase64\": \"{{ $('Webhook').item.json.body.data.message.imageMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.stickerMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.videoMessage?.jpegThumbnail ?? '' }}\",\n  \"mediaMimetype\": \"{{ $('Webhook').item.json.body.data.message.imageMessage?.mimetype ?? $('Webhook').item.json.body.data.message.stickerMessage?.mimetype ?? $('Webhook').item.json.body.data.message.videoMessage?.mimetype ?? '' }}\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",

@@ -242,6 +242,26 @@ export async function updateBusinessTablaMemoria(
   }
 }
 
+export async function updateBuscarMediaEvolution(
+  id: string,
+  value: boolean,
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "No autorizado." };
+  try {
+    await prisma.business.update({
+      where: { id },
+      data: { buscarMediaEvolution: value },
+    });
+    revalidatePath(`/admin/negocios/${id}`);
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error: "No se pudo actualizar la configuración de multimedia.",
+    };
+  }
+}
+
 // ── Funnel stages ────────────────────────────────────────────────────────
 
 export type FunnelStageInput = {

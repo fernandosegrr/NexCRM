@@ -24,7 +24,8 @@ model Business {
   creadoAt     DateTime           @default(now())
   plan               String             @default("basico") // 'basico' | 'pro'
   tablaMemoria       String?
-  modoClasificacion  String             @default("sugerencia") // 'sugerencia' | 'automatico'
+  modoClasificacion    String             @default("sugerencia") // 'sugerencia' | 'automatico'
+  buscarMediaEvolution Boolean            @default(false) // Si true: escanear BD Evolution por imágenes del bot (WA)
   instancias   BusinessInstance[]
   usuarios     User[]
   mensajes     Message[]

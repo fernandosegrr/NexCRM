@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { incomingMessageSchema } from "@/lib/validations";
+import { normalizeTipoMedia } from "@/lib/data";
+import { uploadBase64, uploadFromUrl } from "@/lib/cloudinary";
+import { buscarMediaEnviada } from "@/lib/evolution-db";
 import { resolveContact } from "@/lib/contact-resolver";
 import { classifyContact } from "@/lib/funnel-classifier";
 
@@ -147,6 +150,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Captura multimedia ────────────────────────────────────────────────
+    // Intentar subir el archivo antes de crear el mensaje para incluir la URL
+    // directamente en metadata. Si Cloudinary falla → continuar sin URL de media.
+
+    let resolvedMediaUrl: string | null = null;
+    const normalizedTipoMedia = normalizeTipoMedia(d.tipoMedia);
+
+    // CASO A: Usuario WA manda imagen con jpegThumbnail en base64
+    if (d.mediaBase64 && d.mediaBase64.length > 0) {
+      try {
+        const mimetype = d.mediaMimetype ?? "image/jpeg";
+        resolvedMediaUrl = await uploadBase64(d.mediaBase64, mimetype);
+      } catch (err) {
+        console.error("[media] Error subiendo base64 a Cloudinary:", err);
+      }
+    }
+    // CASO B/D: Usuario IG/MS o echo del bot con URL del CDN de Meta
+    else if (d.mediaMetaUrl && d.mediaMetaUrl.length > 0 && inst.metaPageAccessToken) {
+      try {
+        resolvedMediaUrl = await uploadFromUrl(d.mediaMetaUrl, inst.metaPageAccessToken);
+      } catch (err) {
+        console.error("[media] Error descargando media de Meta CDN:", err);
+      }
+    }
+
+    // Construir metadata final mergeando d.metadata + url de Cloudinary.
+    // d.metadata es Record<string, any> (Zod), compatible con InputJsonValue de Prisma.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let finalMetadata: Record<string, any> | undefined =
+      d.metadata !== null && d.metadata !== undefined ? d.metadata : undefined;
+    if (resolvedMediaUrl) {
+      finalMetadata = { ...(d.metadata ?? {}), url: resolvedMediaUrl };
+    }
+
     const msg = await prisma.message.create({
       data: {
         instanciaId: d.instanciaId,
@@ -158,14 +195,11 @@ export async function POST(req: NextRequest) {
         uidUsuario: normalizedUid,
         rol: d.rol,
         contenido: d.contenido ?? null,
-        tipoMedia: d.tipoMedia && d.tipoMedia.length ? d.tipoMedia : "text",
+        tipoMedia: normalizedTipoMedia,
         latenciaMs: d.latenciaMs ?? null,
-        metadata:
-          d.metadata === null || d.metadata === undefined
-            ? undefined
-            : d.metadata,
+        metadata: finalMetadata,
       },
-      select: { id: true },
+      select: { id: true, enviadoAt: true },
     });
 
     void auditLog({
@@ -206,7 +240,56 @@ export async function POST(req: NextRequest) {
       })();
     }
 
-    return NextResponse.json({ id: msg.id.toString() }, { status: 201 });
+    const response = NextResponse.json({ id: msg.id.toString() }, { status: 201 });
+
+    // CASO C: Buscar imágenes enviadas por el bot WA vía HTTP tools (fire-and-forget)
+    // Solo para mensajes de bot en WhatsApp con buscarMediaEvolution activado.
+    if (d.rol === "bot" && inst.canal === "whatsapp") {
+      void (async () => {
+        try {
+          const business = await prisma.business.findUnique({
+            where: { id: inst.businessId },
+            select: { buscarMediaEvolution: true },
+          });
+          if (!business?.buscarMediaEvolution) return;
+
+          const mediaMessages = await buscarMediaEnviada(
+            d.instanciaId,
+            normalizedUid,
+            msg.enviadoAt,
+          );
+
+          for (const media of mediaMessages) {
+            if (!media.jpegThumbnail) continue;
+            try {
+              const mimetype = media.mimetype ?? "image/jpeg";
+              const mediaUrl = await uploadBase64(media.jpegThumbnail, mimetype);
+              await prisma.message.create({
+                data: {
+                  instanciaId: d.instanciaId,
+                  businessId: inst.businessId,
+                  nombreNegocio: inst.business.nombre,
+                  canal: inst.canal,
+                  uidUsuario: normalizedUid,
+                  rol: "bot",
+                  contenido: null,
+                  tipoMedia: normalizeTipoMedia(media.messageType),
+                  latenciaMs: null,
+                  metadata: { url: mediaUrl, fuente: "evolution-media-scan" },
+                  enviadoAt: new Date(media.messageTimestamp * 1000),
+                },
+              });
+            } catch (err) {
+              console.error("[media-scan] Error procesando imagen del bot:", err);
+            }
+          }
+        } catch (err) {
+          console.error("[media-scan] Error en escaneo Evolution DB:", err);
+        }
+      })();
+    }
+
+    return response;
   } catch (err) {
     void auditLog({
       instanciaId: d.instanciaId,

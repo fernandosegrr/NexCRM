@@ -6,7 +6,7 @@
         "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code').item.json.mensaje_usuario }}\"\n}",
+        "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code').item.json.mensaje_usuario }}\",\n  \"mediaMetaUrl\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",

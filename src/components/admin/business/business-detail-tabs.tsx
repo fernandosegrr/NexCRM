@@ -20,7 +20,11 @@ import {
 import { toast } from "sonner";
 
 import { resetUserPassword } from "@/app/actions/users";
-import { updateBusinessTablaMemoria, updateModoClasificacion } from "@/app/actions/businesses";
+import {
+  updateBusinessTablaMemoria,
+  updateModoClasificacion,
+  updateBuscarMediaEvolution,
+} from "@/app/actions/businesses";
 import {
   createBusinessRole,
   updateBusinessRole,
@@ -52,6 +56,7 @@ import { SeguimientoStatsChart } from "@/components/charts/seguimiento-stats";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -134,6 +139,7 @@ export type BusinessDetailTabsProps = {
     plan: string;
     tablaMemoria: string | null;
     modoClasificacion: string;
+    buscarMediaEvolution: boolean;
     instancias: BusinessInstance[];
     totalMensajes: number;
     totalUsuarios: number;
@@ -329,8 +335,10 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
   const [modo, setModo] = useState<"sugerencia" | "automatico">(
     business.modoClasificacion === "automatico" ? "automatico" : "sugerencia",
   );
+  const [buscarMedia, setBuscarMedia] = useState(business.buscarMediaEvolution);
   const [pending, start] = useTransition();
   const [pendingModo, startModo] = useTransition();
+  const [pendingMedia, startMedia] = useTransition();
 
   const igMsgInstances = business.instancias.filter(
     (i) => i.canal === "instagram" || i.canal === "messenger",
@@ -346,6 +354,23 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
         setSavedTabla(tablaMemoria);
         toast.success("Tabla de memoria actualizada.");
       } else {
+        toast.error(r.error ?? "No se pudo guardar.");
+      }
+    });
+  }
+
+  function saveMedia(newVal: boolean) {
+    setBuscarMedia(newVal);
+    startMedia(async () => {
+      const r = await updateBuscarMediaEvolution(business.id, newVal);
+      if (r.ok) {
+        toast.success(
+          newVal
+            ? "Registro de multimedia del bot activado."
+            : "Registro de multimedia del bot desactivado.",
+        );
+      } else {
+        setBuscarMedia(!newVal); // revert on error
         toast.error(r.error ?? "No se pudo guardar.");
       }
     });
@@ -471,6 +496,41 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
               Nombre exacto de la tabla en la BD de n8n. Déjalo vacío si no usas
               seguimiento automático.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Multimedia del bot (Evolution API) */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Multimedia del bot</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Cuando está activado, el CRM busca en Evolution API las imágenes que
+            envió el bot y las registra en el historial. Solo aplica para
+            instancias de WhatsApp.
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">
+                Registrar imágenes enviadas por el bot
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Busca en Evolution API imágenes enviadas en los 20 segundos
+                previos a cada respuesta. Requiere{" "}
+                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                  EVOLUTION_DB_URL
+                </code>{" "}
+                configurada.
+              </p>
+            </div>
+            <Switch
+              checked={buscarMedia}
+              onCheckedChange={saveMedia}
+              disabled={pendingMedia}
+              aria-label="Registrar multimedia del bot"
+            />
           </div>
         </div>
       </section>
