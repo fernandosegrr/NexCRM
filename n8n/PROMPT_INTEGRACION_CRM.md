@@ -77,6 +77,29 @@ Webhook → Switch4
 
 ---
 
+## 3a. NODOS DE INICIO — DOS VERSIONES
+
+Para cada plataforma existen **DOS** nodos de inicio según si el bot está activo o no:
+
+### WhatsApp
+| Estado | Archivo de referencia | Conectar en... | Fuente del contenido |
+|---|---|---|---|
+| `/on` | `whatsapp-inicio.json` | Salida de `Code1`, en paralelo al buffer | `Code1` (descripción/transcripción IA) |
+| `/off` | `whatsapp-inicio-off.json` | `If12` rama false, en paralelo al nodo de registro /off | Directo del webhook |
+
+### Instagram / Messenger
+| Estado | Archivo de referencia | Conectar en... | Fuente del contenido |
+|---|---|---|---|
+| `/on` | `instagram-messenger-inicio.json` | Salida de `Code`, en paralelo al buffer | `Code` (descripción/transcripción IA) |
+| `/off` | `instagram-messenger-inicio-off.json` | `If20` rama false | Directo del webhook |
+
+> **¿Por qué dos versiones?** En la rama `/off`, los nodos `Code` y `Code1` nunca
+> se ejecutan. Si el nodo de inicio apunta a `$('Code1').item.json.mensaje_usuario`
+> cuando el bot está apagado, obtendrá un error de referencia. La versión `/off`
+> lee el contenido directamente del `Webhook`.
+
+---
+
 ## 4. LOS 6 NODOS CRM — JSONs COMPLETOS
 
 Importa cada bloque copiando el contenido del array `"nodes"` e insertándolo
@@ -130,7 +153,7 @@ a los que existan en el flujo donde vas a integrarlo.
     "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
     "sendBody": true,
     "specifyBody": "json",
-    "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code').item.json.mensaje_usuario }}\",\n  \"mediaMetaUrl\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}\"\n}",
+    "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Code').item.json.mensaje_usuario }}\",\n  \"mediaMetaUrl\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}\",\n  \"tipoMedia\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}\"\n}",
     "options": {}
   },
   "type": "n8n-nodes-base.httpRequest",
@@ -218,6 +241,44 @@ a los que existan en el flujo donde vas a integrarlo.
 }
 ```
 
+### Nodo 7 — CRM inicio WhatsApp /off (rol: user, bot apagado)
+```json
+{
+  "parameters": {
+    "method": "POST",
+    "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.instance }}\",\n  \"canal\": \"whatsapp\",\n  \"uidUsuario\": \"{{ $('numero_combinado').item.json.numero_whatsapp }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Webhook').item.json.body.data.message.conversation ?? $('Webhook').item.json.body.data.message.extendedTextMessage?.text ?? null }}\",\n  \"tipoMedia\": \"{{ $('Webhook').item.json.body.data.messageType }}\",\n  \"mediaBase64\": \"{{ $('Webhook').item.json.body.data.message.imageMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.stickerMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.videoMessage?.jpegThumbnail ?? '' }}\",\n  \"mediaMimetype\": \"{{ $('Webhook').item.json.body.data.message.imageMessage?.mimetype ?? $('Webhook').item.json.body.data.message.stickerMessage?.mimetype ?? $('Webhook').item.json.body.data.message.videoMessage?.mimetype ?? '' }}\"\n}",
+    "options": {}
+  },
+  "type": "n8n-nodes-base.httpRequest",
+  "typeVersion": 4.2,
+  "position": [0, 0],
+  "name": "CRM · Mensaje del usuario (inicio)",
+  "onError": "continueRegularOutput"
+}
+```
+
+### Nodo 8 — CRM inicio Instagram/Messenger /off (rol: user, bot apagado)
+```json
+{
+  "parameters": {
+    "method": "POST",
+    "url": "https://postgres-nexcrm.d6cr6o.easypanel.host/api/messages",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "=\n{\n  \"instanciaId\": \"{{ $('Webhook').item.json.body.entry[0].id }}\",\n  \"canal\": \"{{ $('Webhook').item.json.body.object }}\",\n  \"uidUsuario\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\",\n  \"rol\": \"user\",\n  \"contenido\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? null }}\",\n  \"tipoMedia\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}\",\n  \"mediaMetaUrl\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}\"\n}",
+    "options": {}
+  },
+  "type": "n8n-nodes-base.httpRequest",
+  "typeVersion": 4.2,
+  "position": [0, 0],
+  "name": "CRM · Mensaje del usuario (inicio)",
+  "onError": "continueRegularOutput"
+}
+```
+
 ---
 
 ## 5. CHECKLIST DE VERIFICACIÓN
@@ -227,9 +288,11 @@ Después de que la IA modifique el JSON, verifica:
 - [ ] Los nodos CRM aparecen en el array `"nodes"` del JSON.
 - [ ] Las conexiones existen en el objeto `"connections"`.
 - [ ] Los nodos CRM tienen `"onError": "continueRegularOutput"`.
-- [ ] El nodo inicio WA va como rama adicional de `Code1` (paralelo).
+- [ ] El nodo inicio WA `/on` va como rama adicional de `Code1` (paralelo).
+- [ ] El nodo inicio WA `/off` va en `If12` rama false (paralelo al nodo de registro /off).
 - [ ] El nodo fin WA va como rama adicional de `AI Agent` (paralelo a Sheets).
-- [ ] Los nodos inicio IG/MS van solo en la rama `is_echo=false`.
+- [ ] Los nodos inicio IG/MS `/on` van solo en la rama `is_echo=false`.
+- [ ] El nodo inicio IG/MS `/off` va en `If20` rama false.
 - [ ] Los nodos echo van en la rama `is_echo=true`.
 - [ ] Los echoes usan `recipient.id` como `uidUsuario` (no `sender.id`).
 - [ ] El flujo importa en n8n sin errores.
