@@ -577,13 +577,23 @@ export async function updateModoClasificacion(
   businessId: string,
   modo: "sugerencia" | "automatico",
 ): Promise<ActionResult> {
-  if (!(await requireAdmin())) return { ok: false, error: "No autorizado." };
+  const session = await auth();
+  if (!session?.user) return { ok: false, error: "No autorizado." };
+
+  if (session.user.rol === "CLIENTE") {
+    if (session.user.businessId !== businessId) return { ok: false, error: "No autorizado." };
+    // Verificar permiso configurar_embudo desde BD (fuente de verdad)
+    const canConfigure = await callerCan("configurar_embudo");
+    if (!canConfigure) return { ok: false, error: "No tienes permiso para configurar el embudo." };
+  }
+
   try {
     await prisma.business.update({
       where: { id: businessId },
       data: { modoClasificacion: modo },
     });
     revalidatePath(`/admin/negocios/${businessId}`);
+    revalidatePath("/dashboard/embudo");
     return { ok: true };
   } catch {
     return { ok: false, error: "No se pudo actualizar el modo de clasificación." };

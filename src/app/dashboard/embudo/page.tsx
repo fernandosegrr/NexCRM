@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
 import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
+import { ModoClasificacionToggle } from "@/components/dashboard/modo-clasificacion-toggle";
 import { AccessDenied } from "@/components/dashboard/access-denied";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,12 @@ export default async function DashboardFunnelPage() {
   }
 
   const businessId = session.user.businessId;
+  const canConfigure = hasPermission(session.user, "configurar_embudo");
   const [business, stages] = await Promise.all([
-    prisma.business.findUnique({ where: { id: businessId }, select: { plan: true } }),
+    prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true, plan: true, modoClasificacion: true },
+    }),
     prisma.funnelStage.findMany({
       where: { businessId },
       orderBy: { orden: "asc" },
@@ -70,6 +75,12 @@ export default async function DashboardFunnelPage() {
           clasificador de IA para sugerir en qué etapa va cada contacto. Arrastra para reordenar.
         </p>
       </div>
+
+      <ModoClasificacionToggle
+        businessId={businessId}
+        modoActual={business?.modoClasificacion ?? "sugerencia"}
+        canConfigure={canConfigure}
+      />
 
       <FunnelStageManager
         businessId={businessId}
