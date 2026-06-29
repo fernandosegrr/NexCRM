@@ -786,7 +786,7 @@ function RoleDrawer({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent side="right" className="flex w-full flex-col overflow-hidden sm:w-[420px]">
+      <SheetContent side="right" className="flex w-full flex-col overflow-hidden sm:max-w-lg">
         <SheetHeader className="shrink-0">
           <SheetTitle>{role ? "Editar rol" : "Nuevo rol"}</SheetTitle>
         </SheetHeader>
@@ -892,20 +892,20 @@ function MemberDrawer({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent side="right" className="w-[400px]">
+      <SheetContent side="right" className="w-full sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>{member ? "Cambiar contraseña" : "Agregar miembro"}</SheetTitle>
         </SheetHeader>
-        <div className="mt-6 space-y-4">
+        <div className="space-y-5 p-6">
           {!member && (
             <>
               <div className="space-y-2">
                 <Label>Nombre</Label>
-                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Juan Pérez" />
+                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Juan Pérez" className="w-full" />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@empresa.com" />
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@empresa.com" className="w-full" />
               </div>
             </>
           )}
@@ -917,13 +917,14 @@ function MemberDrawer({
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mínimo 6 caracteres"
               autoComplete="new-password"
+              className="w-full"
             />
           </div>
           {!member && (
             <div className="space-y-2">
               <Label>Rol</Label>
               <Select value={roleId} onValueChange={setRoleId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Seleccionar rol" />
                 </SelectTrigger>
                 <SelectContent>
@@ -945,7 +946,8 @@ function MemberDrawer({
               });
             } : handleSubmit}
             disabled={pending || password.length < 6 || (!member && (!nombre || !email || !roleId))}
-            className="w-full"
+            className="w-full mt-2"
+            size="lg"
           >
             {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
             {member ? "Guardar contraseña" : "Agregar miembro"}
