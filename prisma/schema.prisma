@@ -92,6 +92,7 @@ model Message {
 
   @@index([businessId])
   @@index([instanciaId, uidUsuario])
+  @@index([instanciaId, uidUsuario, enviadoAt])
   @@index([enviadoAt(sort: Desc)])
   @@map("messages")
 }
