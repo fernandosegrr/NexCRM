@@ -623,6 +623,11 @@ export function ConversationView({
                         mediaUrl={m.mediaUrl}
                         dark={isBot || isHuman || isPage}
                       />
+                      {isBot && m.mediaUrl && (
+                        <p className="mt-1 text-xs italic text-white/50">
+                          Vista previa — calidad limitada por WhatsApp
+                        </p>
+                      )}
                       {m.contenido && m.contenido.trim() ? (
                         <p className="whitespace-pre-wrap break-words">
                           {m.contenido}
