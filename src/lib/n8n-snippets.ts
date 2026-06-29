@@ -57,6 +57,8 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
         ["rol", "user"],
         ["contenido", "={{ $('Code1').item.json.mensaje_usuario }}"],
         ["tipoMedia", "={{ $('Webhook').item.json.body.data.messageType }}"],
+        ["mediaBase64", "={{ $('Webhook').item.json.body.data.message.imageMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.stickerMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.videoMessage?.jpegThumbnail ?? '' }}"],
+        ["mediaMimetype", "={{ $('Webhook').item.json.body.data.message.imageMessage?.mimetype ?? $('Webhook').item.json.body.data.message.stickerMessage?.mimetype ?? $('Webhook').item.json.body.data.message.videoMessage?.mimetype ?? '' }}"],
       ],
       0,
     );
@@ -100,6 +102,7 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
       ["uidUsuario", "={{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}"],
       ["rol", "user"],
       ["contenido", "={{ $('Code').item.json.mensaje_usuario }}"],
+      ["mediaMetaUrl", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}"],
     ],
     0,
   );
@@ -113,7 +116,9 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
       ["canal", "={{ $('Webhook').item.json.body.object }}"],
       ["uidUsuario", "={{ $('Webhook').item.json.body.entry[0].messaging[0].recipient.id }}"],
       ["rol", "page"],
-      ["contenido", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? '' }}"],
+      ["contenido", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? null }}"],
+      ["tipoMedia", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}"],
+      ["mediaMetaUrl", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}"],
     ],
     320,
   );
