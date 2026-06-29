@@ -86,10 +86,11 @@ function toBase64String(raw: unknown): string | null {
     if (raw === "[object Object]") return null;
     if (raw.length === 0) return null;
 
-    // PRIMERO limpiar (\n, \r, espacios, prefijo data URI), LUEGO validar
+    // PRIMERO limpiar (\n, \r, espacios, prefijo data URI, '=' inicial), LUEGO validar
     const clean = raw
       .replace(/\s/g, "")
-      .replace(/^data:[^;]+;base64,/, "");
+      .replace(/^data:[^;]+;base64,/, "")
+      .replace(/^=+/, "");
 
     if (clean.length === 0) return null;
 
