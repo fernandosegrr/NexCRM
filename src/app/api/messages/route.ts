@@ -336,19 +336,13 @@ export async function POST(req: NextRequest) {
           );
 
           for (const media of mediaMessages) {
-            const cdnUrl = media.mediaUrl || media.videoUrl || media.stickerUrl;
-            if (!cdnUrl) continue;
+            const rawBase64 = media.mediaBase64 || media.videoBase64 || media.stickerBase64;
+            const cleanB64 = toBase64String(rawBase64);
+            if (!cleanB64) continue;
             try {
-              const mimetype = media.mimetype || "image/jpeg";
-              let mediaUrl: string | null = null;
-              const cdnResp = await fetch(cdnUrl);
-              if (cdnResp.ok) {
-                const buf = Buffer.from(await cdnResp.arrayBuffer());
-                mediaUrl = await uploadBase64(buf.toString("base64"), mimetype);
-              } else {
-                console.error("[media-scan] CDN WA respondió", cdnResp.status, cdnUrl);
-              }
-              if (!mediaUrl) continue;
+              const mimetype =
+                media.mimetype || media.videoMimetype || media.stickerMimetype || "image/jpeg";
+              const mediaUrl = await uploadBase64(cleanB64, mimetype);
               await prisma.message.create({
                 data: {
                   instanciaId: d.instanciaId,

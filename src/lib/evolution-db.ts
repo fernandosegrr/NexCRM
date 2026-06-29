@@ -24,17 +24,19 @@ if (process.env.NODE_ENV !== "production") {
 
 export interface EvolutionMediaMessage {
   messageType: string;
-  mediaUrl: string | null;    // imageMessage.url
-  videoUrl: string | null;    // videoMessage.url
-  stickerUrl: string | null;  // stickerMessage.url
+  mediaBase64: string | null;    // imageMessage.jpegThumbnail
+  videoBase64: string | null;    // videoMessage.jpegThumbnail
+  stickerBase64: string | null;  // stickerMessage.jpegThumbnail
   mimetype: string | null;
+  videoMimetype: string | null;
+  stickerMimetype: string | null;
   messageTimestamp: number;
 }
 
 /**
  * Busca mensajes multimedia enviados por el bot (fromMe=true) en un rango
- * de −20s / +5s alrededor de enviadoAt. Extrae la URL del CDN de WhatsApp
- * para descargar y re-subir a Cloudinary.
+ * de −20s / +5s alrededor de enviadoAt. Extrae jpegThumbnail (string base64)
+ * de cada tipo de medio para subir a Cloudinary.
  */
 export async function buscarMediaEnviada(
   instanciaId: string,
@@ -48,18 +50,22 @@ export async function buscarMediaEnviada(
   try {
     const result = await evolutionPool.query<{
       messageType: string;
-      mediaUrl: string | null;
-      videoUrl: string | null;
-      stickerUrl: string | null;
+      mediaBase64: string | null;
       mimetype: string | null;
+      videoBase64: string | null;
+      videoMimetype: string | null;
+      stickerBase64: string | null;
+      stickerMimetype: string | null;
       messageTimestamp: number;
     }>(
       `SELECT
          "messageType",
-         "message"->'imageMessage'->>'url'      AS "mediaUrl",
-         "message"->'imageMessage'->>'mimetype' AS "mimetype",
-         "message"->'videoMessage'->>'url'      AS "videoUrl",
-         "message"->'stickerMessage'->>'url'    AS "stickerUrl",
+         "message"->'imageMessage'->>'jpegThumbnail'  AS "mediaBase64",
+         "message"->'imageMessage'->>'mimetype'       AS "mimetype",
+         "message"->'videoMessage'->>'jpegThumbnail'  AS "videoBase64",
+         "message"->'videoMessage'->>'mimetype'       AS "videoMimetype",
+         "message"->'stickerMessage'->>'jpegThumbnail' AS "stickerBase64",
+         "message"->'stickerMessage'->>'mimetype'     AS "stickerMimetype",
          "messageTimestamp"
        FROM "Message"
        WHERE "instanceId" = (
@@ -80,10 +86,12 @@ export async function buscarMediaEnviada(
 
     return result.rows.map((row) => ({
       messageType: row.messageType,
-      mediaUrl: row.mediaUrl,
-      videoUrl: row.videoUrl,
-      stickerUrl: row.stickerUrl,
+      mediaBase64: row.mediaBase64,
+      videoBase64: row.videoBase64,
+      stickerBase64: row.stickerBase64,
       mimetype: row.mimetype,
+      videoMimetype: row.videoMimetype,
+      stickerMimetype: row.stickerMimetype,
       messageTimestamp: Number(row.messageTimestamp),
     }));
   } catch (err) {
