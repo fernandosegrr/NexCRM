@@ -54,7 +54,7 @@ export const incomingMessageSchema = z.object({
   latenciaMs: z.coerce.number().int().min(0).max(3_600_000).nullish(),
   metadata: z.record(z.string(), z.any()).nullish(),
   // Campos de captura multimedia (opcionales, enviados por los nodos n8n actualizados)
-  mediaBase64: z.string().nullish(),      // base64 del jpegThumbnail (WhatsApp imageMessage/stickerMessage/videoMessage)
+  mediaBase64: z.string().max(5_000_000).nullish(), // base64 del jpegThumbnail (WhatsApp imageMessage/stickerMessage/videoMessage)
   mediaMimetype: z.string().max(100).nullish(), // mimetype correspondiente
   mediaMetaUrl: z.string().nullish(),     // URL del CDN de Meta (Instagram/Messenger attachments o echoes)
 });

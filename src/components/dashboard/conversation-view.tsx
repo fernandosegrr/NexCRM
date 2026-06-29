@@ -64,6 +64,8 @@ function MessageMedia({
   mediaUrl: string | null;
   dark: boolean;
 }) {
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   // Normaliza nombres crudos del webhook WA (imageMessage, stickerMessage, etc.)
   // para que funcionen tanto mensajes nuevos como datos históricos.
   const effectiveType = normalizeTipoMedia(tipoMedia);
@@ -73,14 +75,46 @@ function MessageMedia({
 
   if (renderType === "image") {
     return (
-      <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+      <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={mediaUrl}
           alt="imagen"
-          className="mb-1 max-h-64 w-full rounded-lg object-cover"
+          className="mb-1 max-h-64 w-full cursor-pointer rounded-lg object-cover transition-opacity hover:opacity-90"
+          onClick={() => setLightboxUrl(mediaUrl)}
         />
-      </a>
+        {lightboxUrl && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <div className="relative max-w-[90vw] max-h-[90vh]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightboxUrl}
+                alt="Imagen completa"
+                className="max-h-[90vh] max-w-full rounded-lg object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                onClick={() => setLightboxUrl(null)}
+                className="absolute -right-3 -top-3 rounded-full bg-white p-1 shadow-lg"
+              >
+                <X className="h-4 w-4 text-black" />
+              </button>
+              <a
+                href={lightboxUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-sm text-white underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Abrir en nueva pestaña
+              </a>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
   if (renderType === "video") {

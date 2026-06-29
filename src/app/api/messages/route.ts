@@ -164,8 +164,11 @@ export async function POST(req: NextRequest) {
     // CASO A: Usuario WA manda imagen con jpegThumbnail en base64
     if (d.mediaBase64 && d.mediaBase64.length > 0) {
       try {
+        const cleanBase64 = d.mediaBase64
+          .replace(/\s/g, "")                      // eliminar saltos de línea y espacios
+          .replace(/^data:[^;]+;base64,/, "");     // quitar prefijo data URI si existe
         const mimetype = d.mediaMimetype ?? "image/jpeg";
-        resolvedMediaUrl = await uploadBase64(d.mediaBase64, mimetype);
+        resolvedMediaUrl = await uploadBase64(cleanBase64, mimetype);
       } catch (err) {
         console.error("[media] Error subiendo base64 a Cloudinary:", err);
       }
