@@ -71,20 +71,22 @@ async function auditLog(data: {
 }
 
 /**
- * Convierte a base64 limpio para Cloudinary. Soporta tres formatos:
- *   1. String base64 directo de message.base64 (Evolution API con base64 activado)
- *   2. Buffer serializado como objeto {0:137,1:80,...} (jpegThumbnail en JSON body mode)
- *   3. Buffer serializado como JSON string '{"0":137,...}' (jpegThumbnail en keypair mode)
- * Las claves del Buffer se ordenan numéricamente para garantizar el orden correcto.
+ * Convierte a base64 limpio para Cloudinary. Soporta:
+ *   1. String base64 directo (message.base64 de Evolution API)
+ *   2. Objeto Buffer {0:137,1:80,...} (jpegThumbnail si llega como Record real)
+ *   3. Data URI 'data:image/jpeg;base64,...'
+ * Rechaza '[object Object]' (n8n serialización errónea en keypair mode).
  */
 function toBase64String(raw: unknown): string | null {
   if (!raw) return null;
 
-  // Caso 2: objeto Buffer directo (JSON body mode, jpegThumbnail llega como Record)
-  if (typeof raw === "object") {
+  // Caso 2: objeto Buffer directo (parsed from JSON body)
+  if (typeof raw === "object" && !Array.isArray(raw)) {
     try {
       const obj = raw as Record<string, number>;
-      const bytes = Object.keys(obj)
+      const keys = Object.keys(obj).filter((k) => !isNaN(Number(k)));
+      if (keys.length === 0) return null;
+      const bytes = keys
         .sort((a, b) => Number(a) - Number(b))
         .map((k) => Number(obj[k]));
       return Buffer.from(bytes).toString("base64");
@@ -95,22 +97,17 @@ function toBase64String(raw: unknown): string | null {
 
   if (typeof raw !== "string") return null;
 
-  // Caso 3: Buffer serializado como string por n8n keypair: '{"0":137,"1":80,...}'
-  if (raw.trimStart().startsWith("{")) {
-    try {
-      const obj = JSON.parse(raw) as Record<string, number>;
-      const bytes = Object.keys(obj)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => Number(obj[k]));
-      return Buffer.from(bytes).toString("base64");
-    } catch {
-      return null;
-    }
-  }
+  // n8n serializa objetos como '[object Object]' en keypair mode — descartar
+  if (raw === "[object Object]") return null;
 
   // Caso 1: string base64 directo o data URI
   const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
-  return cleaned.length > 0 ? cleaned : null;
+  if (cleaned.length === 0) return null;
+
+  // Validar que solo contenga caracteres base64 válidos
+  if (!/^[A-Za-z0-9+/]+=*$/.test(cleaned)) return null;
+
+  return cleaned;
 }
 
 export const runtime = "nodejs";
