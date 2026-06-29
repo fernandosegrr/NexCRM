@@ -110,7 +110,7 @@ type BusinessInstance = {
   metaTokenExpiresAt?: string | null;
 };
 
-type Snippet = { inicio: string; humanReply: string; fin: string };
+type Snippet = { inicio: string; inicioOff: string; humanReply: string; fin: string };
 
 type TeamMember = {
   id: string;
@@ -166,12 +166,14 @@ function SnippetBlock({
   code,
   filename,
   deprecated,
+  description,
 }: {
   title: string;
   rol: "user" | "bot" | "human" | "page";
   code: string;
   filename: string;
   deprecated?: boolean;
+  description?: string;
 }) {
   const badgeVariant =
     rol === "bot"
@@ -184,14 +186,19 @@ function SnippetBlock({
   return (
     <div className={`overflow-hidden rounded-lg border border-border bg-background/50${deprecated ? " opacity-60" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <Badge variant={badgeVariant}>{rol}</Badge>
-          <span className="text-sm font-medium">{title}</span>
-          {deprecated && (
-            <Badge variant="muted" className="text-[10px]">Deprecado</Badge>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={badgeVariant}>{rol}</Badge>
+            <span className="text-sm font-medium">{title}</span>
+            {deprecated && (
+              <Badge variant="muted" className="text-[10px]">Deprecado</Badge>
+            )}
+          </div>
+          {description && (
+            <p className="mt-1 text-[11px] text-muted-foreground">{description}</p>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <CopyButton value={code} />
           <DownloadButton value={code} filename={filename} label=".json" />
         </div>
@@ -793,12 +800,20 @@ function BotTab({
               </code>
             ))}
           </div>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SnippetBlock
-              title="Inicio (usuario)"
+              title="Inicio /on (bot activo)"
               rol="user"
               code={waSnippets.inicio}
               filename="crm-whatsapp-inicio.json"
+              description="Va en Code1. Contenido via descripción/transcripción IA."
+            />
+            <SnippetBlock
+              title="Inicio /off (bot pausado)"
+              rol="user"
+              code={waSnippets.inicioOff}
+              filename="crm-whatsapp-inicio-off.json"
+              description="Va en If12=false. Lee el mensaje directo del webhook, sin Code1."
             />
             <SnippetBlock
               title="Respuesta humana (fromMe=true)"
@@ -828,12 +843,20 @@ function BotTab({
               </code>
             ))}
           </div>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SnippetBlock
-              title="Inicio (usuario — is_echo=false)"
+              title="Inicio /on (is_echo=false)"
               rol="user"
               code={igMsgSnippets.inicio}
               filename="crm-ig-messenger-inicio.json"
+              description="Va en Code. Contenido via descripción/transcripción IA."
+            />
+            <SnippetBlock
+              title="Inicio /off (bot pausado)"
+              rol="user"
+              code={igMsgSnippets.inicioOff}
+              filename="crm-ig-messenger-inicio-off.json"
+              description="Va en If20=false. Lee el mensaje directo del webhook, sin Code."
             />
             <SnippetBlock
               title="Echo de página (is_echo=true)"

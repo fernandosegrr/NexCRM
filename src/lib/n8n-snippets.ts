@@ -34,6 +34,7 @@ function wrap(node: Record<string, unknown>): string {
 
 export type N8nSnippets = {
   inicio: string;
+  inicioOff: string;
   humanReply: string;
   fin: string;
 };
@@ -88,7 +89,22 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
       ],
       640,
     );
-    return { inicio: wrap(inicio), humanReply: wrap(humanReply), fin: wrap(fin) };
+    const inicioOff = httpNode(
+      "CRM · Mensaje del usuario (inicio /off)",
+      url,
+      [
+        ["instanciaId", "={{ $('Webhook').item.json.body.instance }}"],
+        ["canal", "whatsapp"],
+        ["uidUsuario", "={{ $('numero_combinado').item.json.numero_whatsapp }}"],
+        ["rol", "user"],
+        ["contenido", "={{ $('Webhook').item.json.body.data.message.conversation ?? $('Webhook').item.json.body.data.message.extendedTextMessage?.text ?? null }}"],
+        ["tipoMedia", "={{ $('Webhook').item.json.body.data.messageType }}"],
+        ["mediaBase64", "={{ $('Webhook').item.json.body.data.message.imageMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.stickerMessage?.jpegThumbnail ?? $('Webhook').item.json.body.data.message.videoMessage?.jpegThumbnail ?? '' }}"],
+        ["mediaMimetype", "={{ $('Webhook').item.json.body.data.message.imageMessage?.mimetype ?? $('Webhook').item.json.body.data.message.stickerMessage?.mimetype ?? $('Webhook').item.json.body.data.message.videoMessage?.mimetype ?? '' }}"],
+      ],
+      0,
+    );
+    return { inicio: wrap(inicio), inicioOff: wrap(inicioOff), humanReply: wrap(humanReply), fin: wrap(fin) };
   }
 
   // Instagram y Messenger usan el mismo formato de webhook Meta.
@@ -103,6 +119,7 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
       ["rol", "user"],
       ["contenido", "={{ $('Code').item.json.mensaje_usuario }}"],
       ["mediaMetaUrl", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}"],
+      ["tipoMedia", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}"],
     ],
     0,
   );
@@ -134,7 +151,21 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
     ],
     640,
   );
-  return { inicio: wrap(inicio), humanReply: wrap(humanReply), fin: wrap(fin) };
+  const inicioOff = httpNode(
+    "CRM · Mensaje del usuario (inicio /off)",
+    url,
+    [
+      ["instanciaId", "={{ $('Webhook').item.json.body.entry[0].id }}"],
+      ["canal", "={{ $('Webhook').item.json.body.object }}"],
+      ["uidUsuario", "={{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}"],
+      ["rol", "user"],
+      ["contenido", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.text ?? null }}"],
+      ["tipoMedia", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.type ?? 'text' }}"],
+      ["mediaMetaUrl", "={{ $('Webhook').item.json.body.entry[0].messaging[0].message.attachments?.[0]?.payload?.url ?? '' }}"],
+    ],
+    0,
+  );
+  return { inicio: wrap(inicio), inicioOff: wrap(inicioOff), humanReply: wrap(humanReply), fin: wrap(fin) };
 }
 
 // ── Prompt para LLM ──────────────────────────────────────────────────────────
@@ -183,7 +214,8 @@ export function buildN8nPrompt(channels: {
   if (hasWA && channels.whatsapp) {
     const s = channels.whatsapp;
     nodeBlocks.push(
-      jsonBlock(`Nodo ${nodeIdx++} — CRM inicio WhatsApp (rol: user)`, s.inicio),
+      jsonBlock(`Nodo ${nodeIdx++} — CRM inicio WhatsApp /on (rol: user)`, s.inicio),
+      jsonBlock(`Nodo ${nodeIdx++} — CRM inicio WhatsApp /off (rol: user, bot pausado)`, s.inicioOff),
       jsonBlock(`Nodo ${nodeIdx++} — CRM fin WhatsApp (rol: bot)`, s.fin),
       jsonBlock(
         `Nodo ${nodeIdx++} — CRM respuesta humana WhatsApp (rol: human) — DEAD END`,
@@ -195,8 +227,12 @@ export function buildN8nPrompt(channels: {
     const s = channels.igMsg;
     nodeBlocks.push(
       jsonBlock(
-        `Nodo ${nodeIdx++} — CRM inicio Instagram/Messenger (rol: user, compartido IG+MS)`,
+        `Nodo ${nodeIdx++} — CRM inicio Instagram/Messenger /on (rol: user, compartido IG+MS)`,
         s.inicio,
+      ),
+      jsonBlock(
+        `Nodo ${nodeIdx++} — CRM inicio Instagram/Messenger /off (rol: user, bot pausado)`,
+        s.inicioOff,
       ),
       jsonBlock(
         `Nodo ${nodeIdx++} — CRM echo Instagram/Messenger (rol: page, is_echo=true) — DEAD END`,
@@ -213,14 +249,16 @@ export function buildN8nPrompt(channels: {
   ];
   if (hasWA) {
     checklist.push(
-      "- [ ] El nodo inicio WA va como rama adicional de `Code1` (paralelo, no bloquea al bot).",
+      "- [ ] El nodo inicio WA `/on` va como rama adicional de `Code1` (paralelo, no bloquea al bot).",
+      "- [ ] El nodo inicio WA `/off` va en `If12` rama false, en paralelo al nodo de registro /off.",
       "- [ ] El nodo fin WA va como rama adicional del AI Agent (paralelo a Sheets).",
       "- [ ] El nodo respuesta humana WA es DEAD END — sin conexión de salida.",
     );
   }
   if (hasIG) {
     checklist.push(
-      "- [ ] Los nodos inicio IG/MS van solo en la rama `is_echo=false`.",
+      "- [ ] Los nodos inicio IG/MS `/on` van solo en la rama `is_echo=false`.",
+      "- [ ] El nodo inicio IG/MS `/off` va en `If20` rama false.",
       "- [ ] El nodo echo va en la rama `is_echo=true` y es DEAD END.",
       "- [ ] El echo usa `recipient.id` como `uidUsuario` (no `sender.id`).",
     );
