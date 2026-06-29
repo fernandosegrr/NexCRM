@@ -70,6 +70,31 @@ async function auditLog(data: {
   }
 }
 
+/** Convierte un jpegThumbnail de Evolution API a base64 limpio.
+ *  Acepta string (base64 directo) u objeto con keys numéricas (Buffer serializado). */
+function toBase64String(raw: unknown): string | null {
+  if (!raw) return null;
+
+  if (typeof raw === "string") {
+    const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
+    return cleaned.length > 0 ? cleaned : null;
+  }
+
+  if (typeof raw === "object") {
+    try {
+      const bufferObj = raw as Record<string, number>;
+      const values = Object.keys(bufferObj)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => bufferObj[k]);
+      return Buffer.from(values).toString("base64");
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -161,12 +186,10 @@ export async function POST(req: NextRequest) {
       ? 'image'
       : normalizedTipoMedia;
 
-    // CASO A: Usuario WA manda imagen con jpegThumbnail en base64
-    if (d.mediaBase64 && d.mediaBase64.length > 0) {
+    // CASO A: Usuario WA manda imagen con jpegThumbnail (string base64 o Buffer serializado)
+    const cleanBase64 = toBase64String(d.mediaBase64);
+    if (cleanBase64) {
       try {
-        const cleanBase64 = d.mediaBase64
-          .replace(/\s/g, "")                      // eliminar saltos de línea y espacios
-          .replace(/^data:[^;]+;base64,/, "");     // quitar prefijo data URI si existe
         const mimetype = d.mediaMimetype ?? "image/jpeg";
         resolvedMediaUrl = await uploadBase64(cleanBase64, mimetype);
       } catch (err) {
