@@ -9,6 +9,7 @@ import {
   FileText,
   Loader2,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   RotateCw,
   Sparkles,
@@ -42,6 +43,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ChannelBadge } from "@/components/channel-badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { BotToggle } from "./bot-toggle";
 import { ReplyInput } from "./reply-input";
@@ -59,10 +66,12 @@ function MessageMedia({
 }) {
   // Normaliza nombres crudos del webhook WA (imageMessage, stickerMessage, etc.)
   // para que funcionen tanto mensajes nuevos como datos históricos.
-  const type = normalizeTipoMedia(tipoMedia);
-  if (!mediaUrl || type === "text") return null;
+  const effectiveType = normalizeTipoMedia(tipoMedia);
+  // Fallback: if a mediaUrl exists but type resolved to 'text', treat as image.
+  const renderType = (mediaUrl && effectiveType === "text") ? "image" : effectiveType;
+  if (!mediaUrl || renderType === "text") return null;
 
-  if (type === "image") {
+  if (renderType === "image") {
     return (
       <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -74,7 +83,7 @@ function MessageMedia({
       </a>
     );
   }
-  if (type === "video") {
+  if (renderType === "video") {
     return (
       <video
         src={mediaUrl}
@@ -83,7 +92,7 @@ function MessageMedia({
       />
     );
   }
-  if (type === "audio") {
+  if (renderType === "audio") {
     return <audio src={mediaUrl} controls className="mb-1 w-full" />;
   }
   // document u otro
@@ -356,52 +365,103 @@ export function ConversationView({
             <ChannelBadge canal={contact.canal} size="xs" />
           </div>
         </div>
-        <ConversationSummaryButton
-          instanciaId={contact.instanciaId}
-          uidUsuario={contact.uidUsuario}
-        />
-        {contact.businessId && (
-          <>
-            <StageSelector
-              instanciaId={contact.instanciaId}
-              uidUsuario={contact.uidUsuario}
-              canal={contact.canal}
-              businessId={contact.businessId}
-              currentStageId={contact.stageId ?? null}
-              onChanged={(change) => {
-                onStageChange?.(change);
-                setSug(null); // una asignación manual supersede la sugerencia
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0"
-              onClick={runClassify}
-              disabled={classifying}
-              title="Clasificar etapa con IA"
-            >
-              {classifying ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Sparkles className="size-4" />
-              )}
-            </Button>
-          </>
-        )}
+        {/* Siempre visible: bot toggle */}
         <BotToggle
           instanciaId={contact.instanciaId}
           uidUsuario={contact.uidUsuario}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("size-8 shrink-0", panelOpen && "bg-accent")}
-          onClick={() => setPanelOpen((p) => !p)}
-          title="Ficha del contacto"
-        >
-          <User className="size-4" />
-        </Button>
+
+        {/* Móvil: menú "···" con el resto de controles */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8 shrink-0 md:hidden">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem asChild>
+              <ConversationSummaryButton
+                instanciaId={contact.instanciaId}
+                uidUsuario={contact.uidUsuario}
+              />
+            </DropdownMenuItem>
+            {contact.businessId && (
+              <>
+                <DropdownMenuItem asChild>
+                  <StageSelector
+                    instanciaId={contact.instanciaId}
+                    uidUsuario={contact.uidUsuario}
+                    canal={contact.canal}
+                    businessId={contact.businessId}
+                    currentStageId={contact.stageId ?? null}
+                    onChanged={(change) => {
+                      onStageChange?.(change);
+                      setSug(null);
+                    }}
+                  />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={runClassify} disabled={classifying}>
+                  {classifying ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 size-4" />
+                  )}
+                  Clasificar etapa con IA
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuItem onClick={() => setPanelOpen((p) => !p)}>
+              <User className="mr-2 size-4" />
+              Ver perfil
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Desktop: todos los controles visibles */}
+        <div className="hidden md:flex items-center gap-2">
+          <ConversationSummaryButton
+            instanciaId={contact.instanciaId}
+            uidUsuario={contact.uidUsuario}
+          />
+          {contact.businessId && (
+            <>
+              <StageSelector
+                instanciaId={contact.instanciaId}
+                uidUsuario={contact.uidUsuario}
+                canal={contact.canal}
+                businessId={contact.businessId}
+                currentStageId={contact.stageId ?? null}
+                onChanged={(change) => {
+                  onStageChange?.(change);
+                  setSug(null);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0"
+                onClick={runClassify}
+                disabled={classifying}
+                title="Clasificar etapa con IA"
+              >
+                {classifying ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+              </Button>
+            </>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("size-8 shrink-0", panelOpen && "bg-accent")}
+            onClick={() => setPanelOpen((p) => !p)}
+            title="Ficha del contacto"
+          >
+            <User className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Franja de sugerencia de IA */}

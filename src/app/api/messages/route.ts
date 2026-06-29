@@ -156,6 +156,10 @@ export async function POST(req: NextRequest) {
 
     let resolvedMediaUrl: string | null = null;
     const normalizedTipoMedia = normalizeTipoMedia(d.tipoMedia);
+    // If a Meta CDN URL is present but tipoMedia resolved to 'text', it must be 'image'.
+    const tipoFinal = (d.mediaMetaUrl?.length && normalizedTipoMedia === 'text')
+      ? 'image'
+      : normalizedTipoMedia;
 
     // CASO A: Usuario WA manda imagen con jpegThumbnail en base64
     if (d.mediaBase64 && d.mediaBase64.length > 0) {
@@ -195,7 +199,7 @@ export async function POST(req: NextRequest) {
         uidUsuario: normalizedUid,
         rol: d.rol,
         contenido: d.contenido ?? null,
-        tipoMedia: normalizedTipoMedia,
+        tipoMedia: tipoFinal,
         latenciaMs: d.latenciaMs ?? null,
         metadata: finalMetadata,
       },
