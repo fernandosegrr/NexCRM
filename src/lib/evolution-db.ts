@@ -24,15 +24,19 @@ if (process.env.NODE_ENV !== "production") {
 
 export interface EvolutionMediaMessage {
   messageType: string;
-  jpegThumbnail: string | null; // base64
+  mediaBase64: string | null;    // imageMessage.base64
+  videoBase64: string | null;    // videoMessage.base64
+  stickerBase64: string | null;  // stickerMessage.base64
   mimetype: string | null;
-  messageTimestamp: number; // Unix timestamp
+  videoMimetype: string | null;
+  stickerMimetype: string | null;
+  messageTimestamp: number;
 }
 
 /**
  * Busca mensajes multimedia enviados por el bot (fromMe=true) en un rango
- * de −20s / +5s alrededor de enviadoAt. Cubre las imágenes enviadas por el
- * AI Agent antes de que llegue el mensaje de texto final (CRM fin).
+ * de −20s / +5s alrededor de enviadoAt. Extrae el base64 completo de cada
+ * tipo de medio para subir a Cloudinary en calidad original.
  */
 export async function buscarMediaEnviada(
   instanciaId: string,
@@ -46,10 +50,23 @@ export async function buscarMediaEnviada(
   try {
     const result = await evolutionPool.query<{
       messageType: string;
-      message: Record<string, unknown>;
+      mediaBase64: string | null;
+      mimetype: string | null;
+      videoBase64: string | null;
+      videoMimetype: string | null;
+      stickerBase64: string | null;
+      stickerMimetype: string | null;
       messageTimestamp: number;
     }>(
-      `SELECT "messageType", "message", "messageTimestamp"
+      `SELECT
+         "messageType",
+         "message"->'imageMessage'->>'base64'    AS "mediaBase64",
+         "message"->'imageMessage'->>'mimetype'  AS "mimetype",
+         "message"->'videoMessage'->>'base64'    AS "videoBase64",
+         "message"->'videoMessage'->>'mimetype'  AS "videoMimetype",
+         "message"->'stickerMessage'->>'base64'  AS "stickerBase64",
+         "message"->'stickerMessage'->>'mimetype' AS "stickerMimetype",
+         "messageTimestamp"
        FROM "Message"
        WHERE "instanceId" = (
          SELECT id FROM "Instance" WHERE name = $1 LIMIT 1
@@ -62,22 +79,21 @@ export async function buscarMediaEnviada(
          'documentMessage','stickerMessage'
        )
        AND "messageTimestamp" BETWEEN ($3 - 20) AND ($3 + 5)
-       ORDER BY "messageTimestamp" ASC`,
+       ORDER BY "messageTimestamp" ASC
+       LIMIT 1`,
       [instanciaId, uidUsuario, refTimestamp],
     );
 
-    return result.rows.map((row) => {
-      const msg = row.message as Record<string, Record<string, unknown>>;
-      const mediaKey = row.messageType;
-      const mediaObj = msg[mediaKey] ?? {};
-
-      return {
-        messageType: row.messageType,
-        jpegThumbnail: (mediaObj.jpegThumbnail as string) ?? null,
-        mimetype: (mediaObj.mimetype as string) ?? null,
-        messageTimestamp: Number(row.messageTimestamp),
-      };
-    });
+    return result.rows.map((row) => ({
+      messageType: row.messageType,
+      mediaBase64: row.mediaBase64,
+      videoBase64: row.videoBase64,
+      stickerBase64: row.stickerBase64,
+      mimetype: row.mimetype,
+      videoMimetype: row.videoMimetype,
+      stickerMimetype: row.stickerMimetype,
+      messageTimestamp: Number(row.messageTimestamp),
+    }));
   } catch (err) {
     console.error("[evolution-db] Error consultando media del bot:", err);
     return [];

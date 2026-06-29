@@ -336,10 +336,13 @@ export async function POST(req: NextRequest) {
           );
 
           for (const media of mediaMessages) {
-            if (!media.jpegThumbnail) continue;
+            const rawBase64 = media.mediaBase64 || media.videoBase64 || media.stickerBase64;
+            const cleanB64 = toBase64String(rawBase64);
+            if (!cleanB64) continue;
             try {
-              const mimetype = media.mimetype ?? "image/jpeg";
-              const mediaUrl = await uploadBase64(media.jpegThumbnail, mimetype);
+              const mimetype =
+                media.mimetype || media.videoMimetype || media.stickerMimetype || "image/jpeg";
+              const mediaUrl = await uploadBase64(cleanB64, mimetype);
               await prisma.message.create({
                 data: {
                   instanciaId: d.instanciaId,
