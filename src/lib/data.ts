@@ -77,7 +77,7 @@ function serializeMessage(m: {
     uidUsuario: m.uidUsuario,
     rol: m.rol,
     contenido: m.contenido,
-    tipoMedia: m.tipoMedia,
+    tipoMedia: normalizeTipoMedia(m.tipoMedia),
     mediaUrl: extractMediaUrl(m.metadata),
     enviadoAt: m.enviadoAt.toISOString(),
     latenciaMs: m.latenciaMs,

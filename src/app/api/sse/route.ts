@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeTipoMedia } from "@/lib/data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ function serializeMessages(msgs: {
     uidUsuario: m.uidUsuario,
     rol: m.rol,
     contenido: m.contenido,
-    tipoMedia: m.tipoMedia,
+    tipoMedia: normalizeTipoMedia(m.tipoMedia),
     mediaUrl:
       m.metadata &&
       typeof m.metadata === "object" &&
