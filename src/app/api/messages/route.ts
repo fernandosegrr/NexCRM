@@ -173,6 +173,18 @@ export async function POST(req: NextRequest) {
 
     const normalizedUid = d.uidUsuario.split("@")[0];
 
+    // ── Debug logs media ─────────────────────────────────────────────────
+    console.log("[debug] tipoMedia recibido:", d.tipoMedia);
+    console.log(
+      "[debug] mediaBase64 length:",
+      d.mediaBase64
+        ? typeof d.mediaBase64 === "string"
+          ? d.mediaBase64.length
+          : Object.keys(d.mediaBase64).length
+        : 0,
+    );
+    console.log("[debug] mediaMimetype:", d.mediaMimetype);
+
     // Dedup: drop identical content within 5s regardless of role (Meta echoes, webhook retries)
     if (d.contenido) {
       const since = new Date(Date.now() - 5000);
@@ -198,6 +210,7 @@ export async function POST(req: NextRequest) {
     // Convertir base64 antes de calcular tipoFinal: si llega base64 válido
     // pero tipoMedia es null/text (n8n no envió messageType), lo corregimos a 'image'.
     const cleanBase64 = toBase64String(d.mediaBase64);
+    console.log("[debug] cleanBase64:", cleanBase64 ? `${cleanBase64.length} chars` : "NULL");
     const normalizedTipoMedia = normalizeTipoMedia(d.tipoMedia);
     const tipoFinal =
       (d.mediaMetaUrl?.length && normalizedTipoMedia === "text") ? "image" :
@@ -221,6 +234,8 @@ export async function POST(req: NextRequest) {
         console.error("[media] Error descargando media de Meta CDN:", err);
       }
     }
+
+    console.log("[debug] mediaUrl resultado:", resolvedMediaUrl);
 
     // Construir metadata final mergeando d.metadata + url de Cloudinary.
     // d.metadata es Record<string, any> (Zod), compatible con InputJsonValue de Prisma.
@@ -246,8 +261,12 @@ export async function POST(req: NextRequest) {
         latenciaMs: d.latenciaMs ?? null,
         metadata: finalMetadata,
       },
-      select: { id: true, enviadoAt: true },
+      select: { id: true, enviadoAt: true, metadata: true, tipoMedia: true },
     });
+
+    console.log("[debug] mensaje guardado id:", msg.id.toString());
+    console.log("[debug] mensaje metadata:", JSON.stringify(msg.metadata));
+    console.log("[debug] mensaje tipoMedia BD:", msg.tipoMedia);
 
     void auditLog({
       instanciaId: d.instanciaId,
