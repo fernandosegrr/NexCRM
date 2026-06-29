@@ -148,6 +148,92 @@ async function processInstance(inst: {
     };
   }
 
+  // ── RUTA A.5: Falso conectado ────────────────────────────────────────────
+  // Evolution API puede reportar 'open' aunque la conexión WS esté caída
+  // por el proxy. Señal: hay mensajes de usuarios en los últimos 90 min pero
+  // ningún mensaje de bot o humano en ese mismo período.
+  const ninetyMinAgo = new Date(now.getTime() - 90 * 60_000);
+
+  const anyRecentUser = await prisma.message.findFirst({
+    where: { instanciaId, rol: "user", enviadoAt: { gte: ninetyMinAgo } },
+    select: { id: true },
+  });
+
+  if (anyRecentUser) {
+    const anyRecentBotOrHuman = await prisma.message.findFirst({
+      where: { instanciaId, rol: { in: ["bot", "human"] }, enviadoAt: { gte: ninetyMinAgo } },
+      select: { id: true },
+    });
+
+    if (!anyRecentBotOrHuman) {
+      console.log("[health] posible falso conectado (sin respuesta ≥ 90 min):", instanciaId);
+
+      const falsoOpenIncident = await prisma.incidentLog.findFirst({
+        where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
+        select: { id: true },
+      });
+
+      if (!falsoOpenIncident) {
+        const detectedAt = now;
+
+        const clientUsers = await prisma.user.findMany({
+          where: {
+            businessId: inst.business.id,
+            activo: true,
+            OR: [
+              { businessRoleId: null },
+              { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
+            ],
+          },
+          select: { email: true },
+        });
+        for (const u of clientUsers) {
+          try {
+            await sendEmail({
+              to: u.email,
+              subject: `⚠️ Tu asistente virtual dejó de responder — ${businessNombre}`,
+              html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
+            });
+          } catch { /* silencioso */ }
+        }
+
+        const emailEnviado = await sendAlertEmail({
+          subject: `⚠️ Posible falso conectado — ${businessNombre} (${instanciaId})`,
+          html: buildAlertHtml({
+            businessNombre,
+            instanciaId,
+            stuckUids: [],
+            detectedAt,
+            appUrl: APP_URL,
+          }),
+        });
+
+        await prisma.incidentLog.create({
+          data: {
+            instanciaId,
+            nombreNegocio: businessNombre,
+            tipo: "falso_conectado",
+            contactosSinResp: 0,
+            estadoEvolution: "open",
+            accion: "ninguna",
+            resultado: "pendiente",
+            emailEnviado,
+            resolvedAt: null,
+          },
+        });
+
+        return {
+          instanciaId,
+          negocio: businessNombre,
+          tipo: "falso_conectado",
+          resultado: "pendiente",
+          contactosSinResp: 0,
+          estadoEvolution: "open",
+        };
+      }
+    }
+  }
+
   // ── RUTA B: Instancia conectada — verificar si el bot responde ────────────
 
   // ¿Bot respondió en los últimos 5 min? → bot operando → skip
