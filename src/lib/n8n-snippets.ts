@@ -139,125 +139,164 @@ export function buildN8nSnippets(canal: Canal, appUrl: string): N8nSnippets {
 
 // ── Prompt para LLM ──────────────────────────────────────────────────────────
 
-function nodeSection(
-  heading: string,
-  nodes: { label: string; placement: string; json: string }[],
-): string {
-  return [
-    `### ${heading}`,
-    "",
-    ...nodes.flatMap(({ label, placement, json }) => [
-      `**${label}**`,
-      `Dónde conectar: ${placement}`,
-      "```json",
-      json,
-      "```",
-      "",
-    ]),
-  ].join("\n");
+function jsonBlock(title: string, json: string): string {
+  return `### ${title}\n\`\`\`json\n${json}\n\`\`\``;
 }
 
 /**
- * Genera el prompt que un usuario puede pegar en un LLM junto con el JSON
- * de su flujo n8n para que el agente sepa exactamente dónde insertar cada nodo.
+ * Genera el prompt completo que se copia desde el admin para pegar en cualquier IA.
+ * El agente lee el JSON del flujo n8n del usuario, inserta los nodos CRM y devuelve
+ * el flujo completo listo para importar.
  * Solo incluye secciones de los canales que el negocio realmente tiene.
  */
 export function buildN8nPrompt(channels: {
   whatsapp?: N8nSnippets;
   igMsg?: N8nSnippets;
 }): string {
-  const sections: string[] = [];
+  const hasWA = !!channels.whatsapp;
+  const hasIG = !!channels.igMsg;
 
-  if (channels.whatsapp) {
-    const s = channels.whatsapp;
-    sections.push(
-      nodeSection("Canal: WhatsApp (Evolution API)", [
-        {
-          label: '`CRM · Mensaje del usuario (inicio)` — rol: user',
-          placement:
-            "En la ruta principal de mensajes entrantes (fromMe=false), JUSTO ANTES del nodo de IA (Code1 o AI Agent). " +
-            "Insértalo entre el último nodo previo al IA y el propio nodo de IA: " +
-            "[nodo anterior al IA] → [este nodo] → [nodo de IA].",
-          json: s.inicio,
-        },
-        {
-          label: '`CRM · Respuesta humana` — rol: human',
-          placement:
-            "En la salida TRUE del nodo If que evalúa fromMe (o key.fromMe). " +
-            "DEAD END: no conectes este nodo a ningún otro. No debe llegar al Switch ni al nodo de IA.",
-          json: s.humanReply,
-        },
-        {
-          label: '`CRM · Respuesta del bot (fin)` — rol: bot',
-          placement:
-            "Inmediatamente DESPUÉS del nodo de IA (Code1 o AI Agent), como siguiente paso en esa rama: " +
-            "[nodo de IA] → [este nodo].",
-          json: s.fin,
-        },
-      ]),
+  // ── Tabla de reglas de conexión ──────────────────────────────────────────
+  const connectionRows: string[] = [];
+  if (hasWA) {
+    connectionRows.push(
+      "| CRM inicio WA       | HTTP Request | `Code1` (o el nodo que extrae el texto del usuario) | En paralelo al buffer/IA — nunca bloqueante |",
+      "| CRM fin WA          | HTTP Request | `AI Agent` (WhatsApp)                               | En paralelo a Sheets u otros nodos de fin   |",
     );
   }
+  if (hasIG) {
+    connectionRows.push(
+      "| CRM inicio IG/MS    | HTTP Request | `Code` (Instagram/Messenger, rama is_echo=false)    | En paralelo al buffer/IA                    |",
+      "| CRM echo IG/MS      | HTTP Request | Rama `is_echo=true`                                 | DEAD END — sin conexión de salida           |",
+    );
+  }
+  const connectionTable = [
+    "| Nodo CRM | Tipo | Conectar como salida de... | Notar |",
+    "|---|---|---|---|",
+    ...connectionRows,
+  ].join("\n");
 
-  if (channels.igMsg) {
+  // ── Sección de nodos ─────────────────────────────────────────────────────
+  const nodeBlocks: string[] = [];
+  let nodeIdx = 1;
+
+  if (hasWA && channels.whatsapp) {
+    const s = channels.whatsapp;
+    nodeBlocks.push(
+      jsonBlock(`Nodo ${nodeIdx++} — CRM inicio WhatsApp (rol: user)`, s.inicio),
+      jsonBlock(`Nodo ${nodeIdx++} — CRM fin WhatsApp (rol: bot)`, s.fin),
+      jsonBlock(
+        `Nodo ${nodeIdx++} — CRM respuesta humana WhatsApp (rol: human) — DEAD END`,
+        s.humanReply,
+      ),
+    );
+  }
+  if (hasIG && channels.igMsg) {
     const s = channels.igMsg;
-    sections.push(
-      nodeSection(
-        "Canal: Instagram / Messenger (Meta webhook — mismos nodos para ambos)",
-        [
-          {
-            label: '`CRM · Mensaje del usuario (inicio)` — rol: user',
-            placement:
-              "Después del filtro is_echo=false (rama donde llegan mensajes del usuario), " +
-              "justo antes del nodo de IA (Code o AI Agent). " +
-              "Si el flujo maneja Instagram y Messenger en el mismo webhook, agrega el nodo una sola vez.",
-            json: s.inicio,
-          },
-          {
-            label: '`CRM · Echo de página (is_echo=true)` — rol: page',
-            placement:
-              "En la salida TRUE del nodo If que detecta is_echo=true. " +
-              "Registra CUALQUIER mensaje saliente de la página (bot automático o humano desde la bandeja Meta). " +
-              "DEAD END: sin conexión de salida. " +
-              "IMPORTANTE: uidUsuario = recipient.id (el cliente), NO sender.id — " +
-              "en un echo, sender.id es el ID de la propia página Meta.",
-            json: s.humanReply,
-          },
-          {
-            label: '`CRM · Respuesta del bot (fin)` — rol: bot [DEPRECADO para FB/IG]',
-            placement:
-              "DEPRECADO para Instagram/Messenger — el nodo Echo (is_echo=true) ya registra todas las respuestas salientes. " +
-              "Este nodo solo aplica para WhatsApp. No lo uses en flujos de Meta.",
-            json: s.fin,
-          },
-        ],
+    nodeBlocks.push(
+      jsonBlock(
+        `Nodo ${nodeIdx++} — CRM inicio Instagram/Messenger (rol: user, compartido IG+MS)`,
+        s.inicio,
+      ),
+      jsonBlock(
+        `Nodo ${nodeIdx++} — CRM echo Instagram/Messenger (rol: page, is_echo=true) — DEAD END`,
+        s.humanReply,
       ),
     );
   }
 
-  return `Eres un experto en flujos de n8n. Voy a compartirte el JSON de un flujo de automatización de mensajería. \
-Necesito que integres nodos de registro CRM en puntos específicos del flujo, sin modificar la lógica existente.
+  // ── Checklist ─────────────────────────────────────────────────────────────
+  const checklist: string[] = [
+    "- [ ] Los nodos CRM aparecen en el array `\"nodes\"` del JSON.",
+    "- [ ] Las conexiones existen en el objeto `\"connections\"`.",
+    "- [ ] Todos los nodos CRM tienen `\"onError\": \"continueRegularOutput\"`.",
+  ];
+  if (hasWA) {
+    checklist.push(
+      "- [ ] El nodo inicio WA va como rama adicional de `Code1` (paralelo, no bloquea al bot).",
+      "- [ ] El nodo fin WA va como rama adicional del AI Agent (paralelo a Sheets).",
+      "- [ ] El nodo respuesta humana WA es DEAD END — sin conexión de salida.",
+    );
+  }
+  if (hasIG) {
+    checklist.push(
+      "- [ ] Los nodos inicio IG/MS van solo en la rama `is_echo=false`.",
+      "- [ ] El nodo echo va en la rama `is_echo=true` y es DEAD END.",
+      "- [ ] El echo usa `recipient.id` como `uidUsuario` (no `sender.id`).",
+    );
+  }
+  checklist.push("- [ ] El flujo importa en n8n sin errores.");
 
-## Tu tarea
+  return `# Prompt para integrar los nodos CRM de NexAI en un flujo de n8n
 
-Analiza el flujo JSON que aparece al final de este mensaje. Luego agrega los siguientes nodos HTTP Request \
-en los puntos exactos indicados y conéctalos correctamente. Los parámetros ya están configurados; no los modifiques.
+Copia este prompt completo en cualquier IA (Claude, ChatGPT, etc.) y después
+pega al final el JSON de tu flujo de n8n.
 
 ---
 
-${sections.join("\n---\n\n")}
+## 1. INSTRUCCIONES PARA LA IA
+
+Eres un experto en n8n. Tu tarea es modificar el flujo de n8n que aparece
+al final de este mensaje para agregar los nodos del CRM de NexAI.
+
+**Reglas estrictas:**
+1. Lee el JSON del flujo completo.
+2. Identifica los nodos exactos donde debe conectarse cada nodo CRM (ver sección 3).
+3. Agrega los nodos CRM al array \`"nodes"\` del JSON sin modificar ningún nodo existente.
+4. Agrega las conexiones nuevas al objeto \`"connections"\` usando los nombres exactos
+   de los nodos que ya existen en el flujo.
+5. NO modifiques ningún nodo existente — ni su lógica, ni sus conexiones previas.
+6. Devuelve el JSON completo y funcional listo para importar en n8n.
+
 ---
 
-## Reglas obligatorias
+## 2. CONTEXTO — ARQUITECTURA DEL FLUJO
 
-1. \`CRM · Respuesta humana\` es siempre un DEAD END — sin ninguna conexión de salida. \
-   Nunca lo conectes al Switch ni al agente de IA; de lo contrario el bot procesaría sus propios mensajes.
-2. No modifiques las expresiones \`={{ ... }}\` de los campos.
-3. \`onError: "continueRegularOutput"\` ya está en cada nodo — si el CRM falla el bot sigue funcionando.
-4. Las posiciones \`x/y\` son sugeridas; ajústalas al layout del canvas si es necesario.
-5. No elimines ni reordenes los nodos existentes del flujo.
-6. Devuelve el flujo completo como JSON válido, listo para importar en n8n.
+Los nodos CRM van **en paralelo** al flujo principal — nunca interrumpen el bot.
+Todos tienen \`onError: continueRegularOutput\`: si el CRM falla, el bot sigue.
 
-## Flujo a modificar
+Estructura típica del flujo de NexAI:
+\`\`\`
+Webhook → Switch (separa canales)
+${hasWA ? "  ├── WhatsApp  → Code1 → [buffer] → AI Agent → (resultado)" : ""}
+${hasIG ? "  ├── Instagram → Code  → [buffer] → AI Agent → (resultado)" : ""}
+${hasIG ? "  └── Messenger → Code  → [buffer] → AI Agent → (resultado)" : ""}
+\`\`\`
+
+---
+
+## 3. REGLAS DE CONEXIÓN
+
+${connectionTable}
+
+**Regla crítica sobre \`uidUsuario\` en echoes de Meta:**
+- Nodos **inicio** (mensaje del usuario): \`uidUsuario = sender.id\`
+- Nodos **echo** (mensaje saliente de la página): \`uidUsuario = recipient.id\`
+  En un echo, \`sender.id\` es la página propia — el usuario es \`recipient.id\`.
+
+**Sobre autenticación:** si tienes \`MESSAGES_INGEST_TOKEN\` configurado, agrega
+manualmente en cada nodo HTTP Request:
+\`Header: Authorization  →  Value: Bearer <tu_token>\`
+
+---
+
+## 4. LOS NODOS CRM — JSONs COMPLETOS
+
+Adapta los nombres de nodos referenciados (\`$('Webhook')\`, \`$('Code1')\`,
+\`$('Code')\`, \`$('numero_combinado')\`, \`$json.output\`) a los que
+existan en tu flujo real.
+
+${nodeBlocks.join("\n\n")}
+
+---
+
+## 5. CHECKLIST DE VERIFICACIÓN
+
+${checklist.join("\n")}
+
+---
+
+## 6. FLUJO A MODIFICAR
 
 Pega aquí el JSON del flujo de n8n:
 `;
