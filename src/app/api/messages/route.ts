@@ -80,7 +80,28 @@ async function auditLog(data: {
 function toBase64String(raw: unknown): string | null {
   if (!raw) return null;
 
-  // Caso 2: objeto Buffer directo (parsed from JSON body)
+  // Caso 1: string base64 directo o data URI
+  if (typeof raw === "string") {
+    // n8n serializa objetos como '[object Object]' en keypair mode — descartar
+    if (raw === "[object Object]") return null;
+    if (raw.length === 0) return null;
+
+    // PRIMERO limpiar (\n, \r, espacios, prefijo data URI), LUEGO validar
+    const clean = raw
+      .replace(/\s/g, "")
+      .replace(/^data:[^;]+;base64,/, "");
+
+    if (clean.length === 0) return null;
+
+    if (!/^[A-Za-z0-9+/]+=*$/.test(clean)) {
+      console.log("[debug] base64 inválido tras limpieza, primeros 50:", clean.substring(0, 50));
+      return null;
+    }
+
+    return clean;
+  }
+
+  // Caso 2: objeto Buffer serializado {"0":137,...} (jpegThumbnail en JSON body mode)
   if (typeof raw === "object" && !Array.isArray(raw)) {
     try {
       const obj = raw as Record<string, number>;
@@ -95,19 +116,7 @@ function toBase64String(raw: unknown): string | null {
     }
   }
 
-  if (typeof raw !== "string") return null;
-
-  // n8n serializa objetos como '[object Object]' en keypair mode — descartar
-  if (raw === "[object Object]") return null;
-
-  // Caso 1: string base64 directo o data URI
-  const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
-  if (cleaned.length === 0) return null;
-
-  // Validar que solo contenga caracteres base64 válidos
-  if (!/^[A-Za-z0-9+/]+=*$/.test(cleaned)) return null;
-
-  return cleaned;
+  return null;
 }
 
 export const runtime = "nodejs";
