@@ -85,19 +85,120 @@ async function processInstance(inst: {
   const { instanciaId } = inst;
   const businessNombre = inst.business.nombre;
   const now = new Date();
-  const fiveMinAgo = new Date(now.getTime() - 5 * 60_000);
+  const fiveMinAgo   = new Date(now.getTime() -  5 * 60_000);
   const twelveMinAgo = new Date(now.getTime() - 12 * 60_000);
   const thirtyMinAgo = new Date(now.getTime() - 30 * 60_000);
-  const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60_000);
+  const twoHoursAgo  = new Date(now.getTime() -  2 * 60 * 60_000);
 
-  // PASO 2: ¿Bot respondió en los últimos 5 min? → bot operando → skip
+  // ── RUTA A: Desconexión directa ─────────────────────────────────────────
+  // Consultar Evolution API primero; si el estado no es 'open' se envía la
+  // alerta sin esperar a que haya usuarios atascados.
+  const connectionStatus = await fetchEvolutionStatus(instanciaId);
+
+  if (connectionStatus !== "open" && connectionStatus !== "unknown") {
+    console.log("[health] instancia desconectada:", instanciaId, "| estado:", connectionStatus);
+
+    // No duplicar alertas si ya hay un incidente abierto reciente
+    const openIncident = await prisma.incidentLog.findFirst({
+      where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
+      select: { id: true },
+    });
+    if (openIncident) return null;
+
+    const detectedAt = now;
+
+    const emailEnviado = await sendAlertEmail({
+      subject: `⚠️ Instancia desconectada — ${businessNombre} (${instanciaId})`,
+      html: buildAlertHtml({
+        businessNombre,
+        instanciaId,
+        stuckUids: [],
+        detectedAt,
+        appUrl: APP_URL,
+      }),
+    });
+
+    await tryReconnect(instanciaId);
+    await new Promise((r) => setTimeout(r, 5_000));
+    const reconnectStatus = await fetchEvolutionStatus(instanciaId);
+
+    const tipo      = reconnectStatus === "open" ? "auto-recuperada"    : "intervencion_manual";
+    const resultado = reconnectStatus === "open" ? "exitosa"            : "fallida";
+    const resolvedAt = resultado === "exitosa" ? new Date() : undefined;
+
+    await sendAlertEmail({
+      subject:
+        resultado === "exitosa"
+          ? `✅ Auto-recuperada — ${businessNombre}`
+          : `🔴 Auto-recuperación fallida — ${businessNombre} — REQUIERE ATENCIÓN`,
+      html: buildFollowUpHtml({
+        businessNombre,
+        instanciaId,
+        connectionStatus: reconnectStatus,
+        reconnectResult: resultado === "exitosa" ? "exitosa" : "fallida",
+        detectedAt,
+        resolvedAt,
+        appUrl: APP_URL,
+      }),
+    });
+
+    // Notificar al cliente solo si la reconexión no pudo restaurar el servicio
+    if (reconnectStatus !== "open") {
+      const clientUsers = await prisma.user.findMany({
+        where: {
+          businessId: inst.business.id,
+          activo: true,
+          OR: [
+            { businessRoleId: null },
+            { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
+          ],
+        },
+        select: { email: true },
+      });
+      for (const u of clientUsers) {
+        try {
+          await sendEmail({
+            to: u.email,
+            subject: `⚠️ Tu asistente virtual se desconectó — ${businessNombre}`,
+            html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
+          });
+        } catch { /* silencioso */ }
+      }
+    }
+
+    await prisma.incidentLog.create({
+      data: {
+        instanciaId,
+        nombreNegocio: businessNombre,
+        tipo,
+        contactosSinResp: 0,
+        estadoEvolution: reconnectStatus,
+        accion: "reconexion_intentada",
+        resultado,
+        emailEnviado,
+        resolvedAt: resolvedAt ?? null,
+      },
+    });
+
+    return {
+      instanciaId,
+      negocio: businessNombre,
+      tipo,
+      resultado,
+      contactosSinResp: 0,
+      estadoEvolution: reconnectStatus,
+    };
+  }
+
+  // ── RUTA B: Instancia conectada — verificar si el bot responde ────────────
+
+  // ¿Bot respondió en los últimos 5 min? → bot operando → skip
   const recentBot = await prisma.message.findFirst({
     where: { instanciaId, rol: "bot", enviadoAt: { gte: fiveMinAgo } },
     select: { id: true },
   });
   if (recentBot) {
-    // Si había un incidente abierto y el bot ya volvió a responder, lo damos
-    // por recuperado (cierra el badge aunque la recuperación fuera externa).
+    // Si había un incidente abierto y el bot volvió a responder, cerrarlo.
     await prisma.incidentLog.updateMany({
       where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
       data: { resolvedAt: now, tipo: "auto-recuperada", resultado: "exitosa" },
@@ -105,7 +206,7 @@ async function processInstance(inst: {
     return null;
   }
 
-  // PASO 3: Mensajes de usuario en ventana 12–30 min atrás
+  // Mensajes de usuario en ventana 12–30 min atrás
   const userMsgs = await prisma.message.findMany({
     where: {
       instanciaId,
@@ -115,15 +216,12 @@ async function processInstance(inst: {
     select: { uidUsuario: true, enviadoAt: true },
     orderBy: { enviadoAt: "desc" },
   });
-
   if (userMsgs.length === 0) return null;
 
   // Deduplicar por uidUsuario (quedarse con el más reciente)
   const latestByUid = new Map<string, Date>();
   for (const m of userMsgs) {
-    if (!latestByUid.has(m.uidUsuario)) {
-      latestByUid.set(m.uidUsuario, m.enviadoAt);
-    }
+    if (!latestByUid.has(m.uidUsuario)) latestByUid.set(m.uidUsuario, m.enviadoAt);
   }
 
   // Para cada uid, verificar si hay respuesta bot posterior
@@ -140,12 +238,9 @@ async function processInstance(inst: {
     });
     if (!botReply) stuckUids.push(uid);
   }
-
-  // Pre-filtro barato: < 3 atascados en total → no consultar ESTATUS
   if (stuckUids.length < 3) return null;
 
-  // PASO 4: filtrar a los que tienen el bot en /on (descarta pausados
-  // intencionales). El umbral real es 3 contactos /on sin respuesta.
+  // Filtrar a los que tienen el bot en /on (descarta pausados intencionales)
   const onUids: string[] = [];
   for (const uid of stuckUids) {
     try {
@@ -156,17 +251,17 @@ async function processInstance(inst: {
   }
   if (onUids.length < 3) return null;
 
-  // PASO 5: ¿ya hay un incidente abierto reciente? → ya estamos en seguimiento.
-  // No reenviar emails ni reintentar reconexión (evita spam cada 5 min).
-  const openIncident = await prisma.incidentLog.findFirst({
+  // ¿ya hay un incidente abierto reciente? → ya estamos en seguimiento.
+  const openIncidentB = await prisma.incidentLog.findFirst({
     where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
     select: { id: true },
   });
-  if (openIncident) return null;
+  if (openIncidentB) return null;
 
   const detectedAt = new Date();
 
-  // PASO 6: email de alerta inmediata
+  // La instancia está conectada (RUTA B garantiza connectionStatus === "open")
+  // pero el bot no responde → posible falla en el flujo n8n.
   const emailEnviado = await sendAlertEmail({
     subject: `⚠️ Bot sin respuesta — ${businessNombre} (${instanciaId})`,
     html: buildAlertHtml({
@@ -178,108 +273,40 @@ async function processInstance(inst: {
     }),
   });
 
-  // PASO 7: consultar Evolution API
-  const connectionStatus = await fetchEvolutionStatus(instanciaId);
-
-  // PASO 8: auto-recuperación si no está 'open'
-  let tipo = "caida_detectada";
-  let accion = "ninguna";
-  let resultado = "pendiente";
-  let reconnectStatus = connectionStatus;
-
-  if (connectionStatus !== "open") {
-    accion = "reconexion_intentada";
-    await tryReconnect(instanciaId);
-    // Esperar 5 segundos (cron-job.org tiene timeout de 30s)
-    await new Promise((r) => setTimeout(r, 5_000));
-    reconnectStatus = await fetchEvolutionStatus(instanciaId);
-
-    if (reconnectStatus === "open") {
-      tipo = "auto-recuperada";
-      resultado = "exitosa";
-    } else {
-      tipo = "intervencion_manual";
-      resultado = "fallida";
-    }
-  } else {
-    // Conectada pero sin responder → posible falla en flujo n8n
-    resultado = "pendiente";
-  }
-
-  const resolvedAt = resultado === "exitosa" ? new Date() : undefined;
-
-  // PASO 9: email de seguimiento
-  const followUpResult: "exitosa" | "fallida" | "conectada_sin_respuesta" =
-    resultado === "exitosa"
-      ? "exitosa"
-      : connectionStatus === "open"
-        ? "conectada_sin_respuesta"
-        : "fallida";
-
   await sendAlertEmail({
-    subject:
-      followUpResult === "exitosa"
-        ? `✅ Auto-recuperada — ${businessNombre}`
-        : followUpResult === "conectada_sin_respuesta"
-          ? `⚠️ Bot sin responder — instancia conectada — revisar n8n — ${businessNombre}`
-          : `🔴 Auto-recuperación fallida — ${businessNombre} — REQUIERE ATENCIÓN`,
+    subject: `⚠️ Bot sin responder — instancia conectada — revisar n8n — ${businessNombre}`,
     html: buildFollowUpHtml({
       businessNombre,
       instanciaId,
-      connectionStatus: reconnectStatus,
-      reconnectResult: followUpResult,
+      connectionStatus: "open",
+      reconnectResult: "conectada_sin_respuesta",
       detectedAt,
-      resolvedAt,
+      resolvedAt: undefined,
       appUrl: APP_URL,
     }),
   });
 
-  // PASO 9b: notificar al cliente si la instancia está desconectada
-  if (connectionStatus !== "open") {
-    const clientUsers = await prisma.user.findMany({
-      where: {
-        businessId: inst.business.id,
-        activo: true,
-        OR: [
-          { businessRoleId: null },
-          { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
-        ],
-      },
-      select: { email: true },
-    });
-    for (const u of clientUsers) {
-      try {
-        await sendEmail({
-          to: u.email,
-          subject: `⚠️ Tu asistente virtual se desconectó — ${businessNombre}`,
-          html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
-        });
-      } catch { /* silencioso */ }
-    }
-  }
-
-  // PASO 10: registrar incidente (ya verificamos que no había uno abierto)
   await prisma.incidentLog.create({
     data: {
       instanciaId,
       nombreNegocio: businessNombre,
-      tipo,
+      tipo: "caida_detectada",
       contactosSinResp: onUids.length,
-      estadoEvolution: reconnectStatus,
-      accion,
-      resultado,
+      estadoEvolution: "open",
+      accion: "ninguna",
+      resultado: "pendiente",
       emailEnviado,
-      resolvedAt: resolvedAt ?? null,
+      resolvedAt: null,
     },
   });
 
   return {
     instanciaId,
     negocio: businessNombre,
-    tipo,
-    resultado,
+    tipo: "caida_detectada",
+    resultado: "pendiente",
     contactosSinResp: onUids.length,
-    estadoEvolution: reconnectStatus,
+    estadoEvolution: "open",
   };
 }
 

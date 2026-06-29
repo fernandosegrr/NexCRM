@@ -634,7 +634,7 @@ export function Conversations() {
                             <AvatarImage src={c.fotoPerfil} alt={c.nombre ?? c.uidUsuario} />
                           )}
                           <AvatarFallback className={avatarColor(c.uidUsuario)}>
-                            {initialOf(c.nombre ?? c.username ?? c.uidUsuario)}
+                            {initialOf(c.nombre ?? c.username ?? "")}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">

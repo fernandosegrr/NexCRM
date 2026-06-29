@@ -114,7 +114,13 @@ export async function resolveContact(
     await prisma.contact.upsert({
       where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
       create: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil },
-      update: { nombre, username, fotoPerfil, resolvedAt: new Date() },
+      update: {
+        // Never overwrite an existing name/photo with null if the API call failed.
+        ...(nombre     !== null ? { nombre }     : {}),
+        ...(username   !== null ? { username }   : {}),
+        ...(fotoPerfil !== null ? { fotoPerfil } : {}),
+        resolvedAt: new Date(),
+      },
     });
   } catch {
     // Never throw — contact resolution is best-effort
