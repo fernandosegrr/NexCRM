@@ -54,7 +54,10 @@ export const incomingMessageSchema = z.object({
   latenciaMs: z.coerce.number().int().min(0).max(3_600_000).nullish(),
   metadata: z.record(z.string(), z.any()).nullish(),
   // Campos de captura multimedia (opcionales, enviados por los nodos n8n actualizados)
-  mediaBase64: z.string().max(5_000_000).nullish(), // base64 de la imagen (body.data.message.base64 de Evolution API)
+  mediaBase64: z.union([
+    z.string().max(5_000_000),                // base64 string (message.base64 de Evolution API)
+    z.record(z.string(), z.number()),          // Buffer serializado {"0":137,...} (jpegThumbnail JSON body mode)
+  ]).nullish(),
   mediaMimetype: z.string().max(100).nullish(), // mimetype correspondiente
   mediaMetaUrl: z.string().nullish(),     // URL del CDN de Meta (Instagram/Messenger attachments o echoes)
 });

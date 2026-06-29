@@ -70,9 +70,45 @@ async function auditLog(data: {
   }
 }
 
-/** Limpia el string base64 de body.data.message.base64 (Evolution API). */
-function toBase64String(raw: string | null | undefined): string | null {
+/**
+ * Convierte a base64 limpio para Cloudinary. Soporta tres formatos:
+ *   1. String base64 directo de message.base64 (Evolution API con base64 activado)
+ *   2. Buffer serializado como objeto {0:137,1:80,...} (jpegThumbnail en JSON body mode)
+ *   3. Buffer serializado como JSON string '{"0":137,...}' (jpegThumbnail en keypair mode)
+ * Las claves del Buffer se ordenan numéricamente para garantizar el orden correcto.
+ */
+function toBase64String(raw: unknown): string | null {
   if (!raw) return null;
+
+  // Caso 2: objeto Buffer directo (JSON body mode, jpegThumbnail llega como Record)
+  if (typeof raw === "object") {
+    try {
+      const obj = raw as Record<string, number>;
+      const bytes = Object.keys(obj)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => Number(obj[k]));
+      return Buffer.from(bytes).toString("base64");
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof raw !== "string") return null;
+
+  // Caso 3: Buffer serializado como string por n8n keypair: '{"0":137,"1":80,...}'
+  if (raw.trimStart().startsWith("{")) {
+    try {
+      const obj = JSON.parse(raw) as Record<string, number>;
+      const bytes = Object.keys(obj)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => Number(obj[k]));
+      return Buffer.from(bytes).toString("base64");
+    } catch {
+      return null;
+    }
+  }
+
+  // Caso 1: string base64 directo o data URI
   const cleaned = raw.replace(/\s/g, "").replace(/^data:[^;]+;base64,/, "");
   return cleaned.length > 0 ? cleaned : null;
 }
@@ -162,14 +198,16 @@ export async function POST(req: NextRequest) {
     // directamente en metadata. Si Cloudinary falla → continuar sin URL de media.
 
     let resolvedMediaUrl: string | null = null;
-    const normalizedTipoMedia = normalizeTipoMedia(d.tipoMedia);
-    // If a Meta CDN URL is present but tipoMedia resolved to 'text', it must be 'image'.
-    const tipoFinal = (d.mediaMetaUrl?.length && normalizedTipoMedia === 'text')
-      ? 'image'
-      : normalizedTipoMedia;
-
-    // CASO A: Usuario WA manda imagen con jpegThumbnail (string base64 o Buffer serializado)
+    // Convertir base64 antes de calcular tipoFinal: si llega base64 válido
+    // pero tipoMedia es null/text (n8n no envió messageType), lo corregimos a 'image'.
     const cleanBase64 = toBase64String(d.mediaBase64);
+    const normalizedTipoMedia = normalizeTipoMedia(d.tipoMedia);
+    const tipoFinal =
+      (d.mediaMetaUrl?.length && normalizedTipoMedia === "text") ? "image" :
+      (cleanBase64 && normalizedTipoMedia === "text") ? "image" :
+      normalizedTipoMedia;
+
+    // CASO A: Usuario WA manda imagen (base64 real de message.base64 o jpegThumbnail Buffer)
     if (cleanBase64) {
       try {
         const mimetype = d.mediaMimetype ?? "image/jpeg";
