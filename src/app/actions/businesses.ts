@@ -573,6 +573,23 @@ export async function dismissStageSuggestion(
   }
 }
 
+export async function updateModoClasificacion(
+  businessId: string,
+  modo: "sugerencia" | "automatico",
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "No autorizado." };
+  try {
+    await prisma.business.update({
+      where: { id: businessId },
+      data: { modoClasificacion: modo },
+    });
+    revalidatePath(`/admin/negocios/${businessId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo actualizar el modo de clasificación." };
+  }
+}
+
 export async function deleteBusiness(id: string): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!session) return { ok: false, error: "No autorizado" };

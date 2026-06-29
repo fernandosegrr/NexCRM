@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { resetUserPassword } from "@/app/actions/users";
-import { updateBusinessTablaMemoria } from "@/app/actions/businesses";
+import { updateBusinessTablaMemoria, updateModoClasificacion } from "@/app/actions/businesses";
 import {
   createBusinessRole,
   updateBusinessRole,
@@ -77,6 +77,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { isCanal } from "@/lib/channels";
 import {
   PERMISOS_POR_CATEGORIA,
@@ -132,6 +133,7 @@ export type BusinessDetailTabsProps = {
     activo: boolean;
     plan: string;
     tablaMemoria: string | null;
+    modoClasificacion: string;
     instancias: BusinessInstance[];
     totalMensajes: number;
     totalUsuarios: number;
@@ -324,7 +326,11 @@ function ChartCard({
 function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["business"] }) {
   const [tablaMemoria, setTablaMemoria] = useState(business.tablaMemoria ?? "");
   const [savedTabla, setSavedTabla] = useState(business.tablaMemoria ?? "");
+  const [modo, setModo] = useState<"sugerencia" | "automatico">(
+    business.modoClasificacion === "automatico" ? "automatico" : "sugerencia",
+  );
   const [pending, start] = useTransition();
+  const [pendingModo, startModo] = useTransition();
 
   const igMsgInstances = business.instancias.filter(
     (i) => i.canal === "instagram" || i.canal === "messenger",
@@ -339,6 +345,19 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
       if (r.ok) {
         setSavedTabla(tablaMemoria);
         toast.success("Tabla de memoria actualizada.");
+      } else {
+        toast.error(r.error ?? "No se pudo guardar.");
+      }
+    });
+  }
+
+  function saveModo(nuevoModo: "sugerencia" | "automatico") {
+    if (nuevoModo === modo) return;
+    startModo(async () => {
+      const r = await updateModoClasificacion(business.id, nuevoModo);
+      if (r.ok) {
+        setModo(nuevoModo);
+        toast.success("Modo de clasificación actualizado.");
       } else {
         toast.error(r.error ?? "No se pudo guardar.");
       }
@@ -452,6 +471,60 @@ function ConfiguracionTab({ business }: { business: BusinessDetailTabsProps["bus
               Nombre exacto de la tabla en la BD de n8n. Déjalo vacío si no usas
               seguimiento automático.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Clasificación del embudo */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Clasificación del embudo</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Cómo actúa la IA cuando detecta que un contacto debe cambiar de etapa.
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => saveModo("sugerencia")}
+              disabled={pendingModo}
+              className={cn(
+                "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
+                modo === "sugerencia"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              Sugerencia
+            </button>
+            <button
+              type="button"
+              onClick={() => saveModo("automatico")}
+              disabled={pendingModo}
+              className={cn(
+                "flex-1 border-l border-border px-4 py-2.5 text-sm font-medium transition-colors",
+                modo === "automatico"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              Automático
+            </button>
+          </div>
+          <div className="space-y-1.5 text-[12px] text-muted-foreground">
+            {modo === "sugerencia" ? (
+              <p>
+                La IA sugiere el cambio de etapa y el agente lo confirma o descarta
+                desde el panel de conversación.
+              </p>
+            ) : (
+              <p>
+                Cuando la IA detecta el cambio con <strong>confianza alta</strong>,
+                mueve el contacto automáticamente y registra un evento en el historial.
+                Cambios de confianza media o baja siguen apareciendo como sugerencia.
+              </p>
+            )}
           </div>
         </div>
       </section>

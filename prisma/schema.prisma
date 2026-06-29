@@ -22,8 +22,9 @@ model Business {
   canales      String[] // ['whatsapp','instagram','messenger']
   activo       Boolean            @default(true)
   creadoAt     DateTime           @default(now())
-  plan         String             @default("basico") // 'basico' | 'pro'
-  tablaMemoria String?
+  plan               String             @default("basico") // 'basico' | 'pro'
+  tablaMemoria       String?
+  modoClasificacion  String             @default("sugerencia") // 'sugerencia' | 'automatico'
   instancias   BusinessInstance[]
   usuarios     User[]
   mensajes     Message[]

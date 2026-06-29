@@ -166,6 +166,7 @@ export async function getBusinessById(id: string) {
     activo: b.activo,
     plan: b.plan,
     tablaMemoria: b.tablaMemoria,
+    modoClasificacion: b.modoClasificacion,
     creadoAt: b.creadoAt.toISOString(),
     instancias: b.instancias.map((i) => ({
       id: i.id,

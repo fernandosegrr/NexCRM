@@ -4,9 +4,12 @@ import { prisma } from "@/lib/prisma";
  * Clasificador de embudo con IA.
  *
  * Dada una conversación y las etapas (con descripción) del negocio, sugiere en
- * qué etapa del embudo está el cliente usando gpt-5.4-mini. NO mueve al
- * contacto: solo guarda una sugerencia (sugerenciaStageId + razón) que el
- * agente confirma o descarta desde la UI.
+ * qué etapa del embudo está el cliente usando gpt-4o-mini.
+ *
+ * Modos (business.modoClasificacion):
+ *  - 'sugerencia' (default): guarda sugerenciaStageId en Contact; el agente confirma.
+ *  - 'automatico': si confianza === 'alta', mueve ContactStage directamente y
+ *    crea un evento 'ia_stage' en el historial del chat.
  *
  * Throttle: no reclasifica la misma conversación si se clasificó hace < 5 min
  * (salvo `force`, que usa el botón manual on-demand).
@@ -20,6 +23,7 @@ export type ClassifyResult = {
   stageNombre: string;
   stageColor: string;
   razon: string;
+  autoMoved?: boolean;
 } | null;
 
 function rolLabel(rol: string): string {
@@ -32,7 +36,7 @@ function rolLabel(rol: string): string {
 async function classifyWithOpenAI(
   system: string,
   user: string,
-): Promise<{ etapa: string; razon: string } | null> {
+): Promise<{ etapa: string; razon: string; confianza: string } | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -65,6 +69,7 @@ async function classifyWithOpenAI(
     return {
       etapa: parsed.etapa,
       razon: typeof parsed.razon === "string" ? parsed.razon : "",
+      confianza: typeof parsed.confianza === "string" ? parsed.confianza : "baja",
     };
   } catch {
     return null;
@@ -72,9 +77,8 @@ async function classifyWithOpenAI(
 }
 
 /**
- * Clasifica un contacto y guarda la sugerencia. Devuelve la sugerencia
- * generada, o null si no hubo (sin etapas, throttle, sin señales claras, o la
- * IA coincide con la etapa actual).
+ * Clasifica un contacto y guarda la sugerencia (o mueve automáticamente).
+ * Devuelve la sugerencia generada, o null si no hubo.
  */
 export async function classifyContact(
   businessId: string,
@@ -84,13 +88,20 @@ export async function classifyContact(
   opts?: { force?: boolean },
 ): Promise<ClassifyResult> {
   try {
-    // Etapas del negocio (con descripción)
-    const stages = await prisma.funnelStage.findMany({
-      where: { businessId },
-      orderBy: { orden: "asc" },
-      select: { id: true, nombre: true, color: true, descripcion: true },
-    });
-    if (stages.length === 0) return null;
+    const [stages, business] = await Promise.all([
+      prisma.funnelStage.findMany({
+        where: { businessId },
+        orderBy: { orden: "asc" },
+        select: { id: true, nombre: true, color: true, descripcion: true },
+      }),
+      prisma.business.findUnique({
+        where: { id: businessId },
+        select: { nombre: true, modoClasificacion: true },
+      }),
+    ]);
+    if (stages.length === 0 || !business) return null;
+
+    const modoClasificacion = business.modoClasificacion ?? "sugerencia";
 
     // Contacto: throttle + etapa actual (para no sugerir lo que ya tiene)
     const contact = await prisma.contact.findUnique({
@@ -137,13 +148,15 @@ export async function classifyContact(
       "REGLA CRÍTICA sobre cambios de etapa: " +
       "Solo sugiere cambioEtapa=true si el último mensaje en el historial es del USUARIO (rol='user'), no del bot. " +
       "Si el último mensaje es del bot/agente, el usuario no ha reaccionado aún — no se puede confirmar avance de etapa. " +
-      "En ese caso: etapaDetectada = etapa actual, cambioEtapa=false.";
+      "En ese caso: etapaDetectada = etapa actual, cambioEtapa=false.\n\n" +
+      "El campo 'confianza' indica qué tan seguro estás de la clasificación: " +
+      "'alta' = señales muy claras y directas, 'media' = señales presentes pero ambiguas, 'baja' = pocas señales o conversación corta.";
 
     const user =
       `Etapas del embudo (en orden):\n${stageList}\n\n` +
       (lastMsgContext ? `${lastMsgContext}\n\n` : "") +
       `Conversación (del más antiguo al más reciente):\n${transcript.slice(0, 8000)}\n\n` +
-      `Devuelve JSON: {"etapa":"<nombre EXACTO de una etapa de la lista, o NINGUNA>","razon":"<máximo una frase en español>"}`;
+      `Devuelve JSON: {"etapa":"<nombre EXACTO de una etapa de la lista, o NINGUNA>","razon":"<máximo una frase en español>","confianza":"alta|media|baja"}`;
 
     const result = await classifyWithOpenAI(system, user);
     const now = new Date();
@@ -164,9 +177,41 @@ export async function classifyContact(
       }
     }
 
-    // Si la IA respondió (aunque sea "NINGUNA") actualizamos la sugerencia.
-    // Si falló (result null = API caída o parse inválido) NO tocamos la
-    // sugerencia previa: solo marcamos clasificadoAt para el throttle.
+    const confianza = result?.confianza ?? "baja";
+
+    // Modo automático: si confianza es alta y hay sugerencia, mover sin confirmación
+    if (modoClasificacion === "automatico" && confianza === "alta" && suggestion) {
+      const upsertedContact = await prisma.contact.upsert({
+        where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+        create: { uidUsuario, instanciaId, canal, clasificadoAt: now },
+        update: { clasificadoAt: now, sugerenciaStageId: null, sugerenciaRazon: null },
+        select: { id: true },
+      });
+
+      await prisma.contactStage.upsert({
+        where: { contactId_businessId: { contactId: upsertedContact.id, businessId } },
+        create: { contactId: upsertedContact.id, stageId: suggestion.stageId, businessId },
+        update: { stageId: suggestion.stageId, asignadoAt: now },
+      });
+
+      // Evento sutil en el historial del chat
+      await prisma.message.create({
+        data: {
+          instanciaId,
+          businessId,
+          nombreNegocio: business.nombre,
+          canal,
+          uidUsuario,
+          rol: "ia_stage",
+          contenido: suggestion.stageNombre,
+          tipoMedia: "text",
+        },
+      });
+
+      return { ...suggestion, autoMoved: true };
+    }
+
+    // Modo sugerencia (comportamiento por defecto)
     const sugFields =
       result === null
         ? {}

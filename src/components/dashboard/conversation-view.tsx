@@ -467,9 +467,30 @@ export function ConversationView({
               const isBot = m.rol === "bot";
               const isHuman = m.rol === "human";
               const isPage = m.rol === "page";
+              const isIaStage = m.rol === "ia_stage";
               const showDay =
                 i === 0 ||
                 dayLabel(messages[i - 1].enviadoAt) !== dayLabel(m.enviadoAt);
+
+              if (isIaStage) {
+                return (
+                  <div key={m.id}>
+                    {showDay && (
+                      <div className="my-3 flex justify-center">
+                        <span className="rounded-full bg-muted px-3 py-1 text-[11px] text-muted-foreground">
+                          {dayLabel(m.enviadoAt)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="my-2 flex justify-center">
+                      <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-[11px] text-violet-500">
+                        ✦ IA movió a <strong>{m.contenido}</strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={m.id}>
                   {showDay && (

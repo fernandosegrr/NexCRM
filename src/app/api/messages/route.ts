@@ -4,6 +4,41 @@ import { incomingMessageSchema } from "@/lib/validations";
 import { resolveContact } from "@/lib/contact-resolver";
 import { classifyContact } from "@/lib/funnel-classifier";
 
+/** Asigna la primera etapa del embudo al primer mensaje de usuario. Sin GPT. */
+async function maybeAssignFirstStage(
+  businessId: string,
+  instanciaId: string,
+  uidUsuario: string,
+  canal: string,
+): Promise<boolean> {
+  const count = await prisma.message.count({
+    where: { businessId, instanciaId, uidUsuario, rol: "user" },
+  });
+  if (count !== 1) return false;
+
+  const firstStage = await prisma.funnelStage.findFirst({
+    where: { businessId },
+    orderBy: { orden: "asc" },
+    select: { id: true },
+  });
+  if (!firstStage) return false;
+
+  const contact = await prisma.contact.upsert({
+    where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+    create: { uidUsuario, instanciaId, canal },
+    update: {},
+    select: { id: true },
+  });
+
+  await prisma.contactStage.upsert({
+    where: { contactId_businessId: { contactId: contact.id, businessId } },
+    create: { contactId: contact.id, stageId: firstStage.id, businessId },
+    update: {},
+  });
+
+  return true;
+}
+
 async function auditLog(data: {
   instanciaId: string;
   canal?: string;
@@ -152,14 +187,23 @@ export async function POST(req: NextRequest) {
         inst.metaPageAccessToken,
       );
 
-      // Clasificar el embudo con IA (fire-and-forget, con throttle interno).
-      // Nunca bloquea ni rompe la ingesta del bot.
-      void classifyContact(
-        inst.businessId,
-        d.instanciaId,
-        normalizedUid,
-        inst.canal,
-      ).catch(() => {});
+      // Primer mensaje → asignar primera etapa sin GPT.
+      // Mensajes siguientes → clasificar con IA (throttle interno).
+      void (async () => {
+        try {
+          const isFirst = await maybeAssignFirstStage(
+            inst.businessId,
+            d.instanciaId,
+            normalizedUid,
+            inst.canal,
+          );
+          if (!isFirst) {
+            await classifyContact(inst.businessId, d.instanciaId, normalizedUid, inst.canal);
+          }
+        } catch {
+          // Nunca bloquea ni rompe la ingesta del bot.
+        }
+      })();
     }
 
     return NextResponse.json({ id: msg.id.toString() }, { status: 201 });
