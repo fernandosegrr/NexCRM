@@ -321,12 +321,19 @@ export async function POST(req: NextRequest) {
     // CASO C: Buscar imágenes enviadas por el bot WA vía HTTP tools (fire-and-forget)
     // Solo para mensajes de bot en WhatsApp con buscarMediaEvolution activado.
     if (d.rol === "bot" && inst.canal === "whatsapp") {
+      console.log('[casoc] condición met — instanciaId:', d.instanciaId, 'uid:', normalizedUid);
       void (async () => {
         try {
+          console.log('[casoc] iniciando búsqueda Evolution');
+          console.log('[casoc] instanciaId:', d.instanciaId);
+          console.log('[casoc] uidUsuario:', normalizedUid);
+          console.log('[casoc] enviadoAt:', msg.enviadoAt);
+
           const business = await prisma.business.findUnique({
             where: { id: inst.businessId },
             select: { buscarMediaEvolution: true },
           });
+          console.log('[casoc] buscarMediaEvolution:', business?.buscarMediaEvolution);
           if (!business?.buscarMediaEvolution) return;
 
           const mediaMessages = await buscarMediaEnviada(
@@ -335,14 +342,21 @@ export async function POST(req: NextRequest) {
             msg.enviadoAt,
           );
 
+          console.log('[casoc] mediaMessages encontrados:', mediaMessages.length);
+
           for (const media of mediaMessages) {
             const rawBase64 = media.mediaBase64 || media.videoBase64 || media.stickerBase64;
+            console.log('[casoc] messageType:', media.messageType, '— rawBase64 length:', rawBase64?.length ?? 0);
             const cleanB64 = toBase64String(rawBase64);
-            if (!cleanB64) continue;
+            if (!cleanB64) {
+              console.log('[casoc] cleanB64 null → skip');
+              continue;
+            }
             try {
               const mimetype =
                 media.mimetype || media.videoMimetype || media.stickerMimetype || "image/jpeg";
               const mediaUrl = await uploadBase64(cleanB64, mimetype);
+              console.log('[casoc] subido a Cloudinary:', mediaUrl);
               await prisma.message.create({
                 data: {
                   instanciaId: d.instanciaId,
@@ -358,6 +372,7 @@ export async function POST(req: NextRequest) {
                   enviadoAt: new Date(media.messageTimestamp * 1000),
                 },
               });
+              console.log('[casoc] mensaje multimedia guardado en BD');
             } catch (err) {
               console.error("[media-scan] Error procesando imagen del bot:", err);
             }
@@ -366,6 +381,8 @@ export async function POST(req: NextRequest) {
           console.error("[media-scan] Error en escaneo Evolution DB:", err);
         }
       })();
+    } else {
+      console.log('[casoc] NO aplica — rol:', d.rol, 'canal:', inst.canal);
     }
 
     return response;

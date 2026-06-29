@@ -43,9 +43,13 @@ export async function buscarMediaEnviada(
   uidUsuario: string,
   enviadoAt: Date,
 ): Promise<EvolutionMediaMessage[]> {
-  if (!process.env.EVOLUTION_DB_URL) return [];
+  if (!process.env.EVOLUTION_DB_URL) {
+    console.log('[casoc] EVOLUTION_DB_URL no configurado → skip');
+    return [];
+  }
 
   const refTimestamp = Math.floor(enviadoAt.getTime() / 1000);
+  console.log('[casoc] Evolution query — instanciaId:', instanciaId, 'uid:', uidUsuario, 'refTimestamp:', refTimestamp, 'ventana:', `[${refTimestamp - 20}, ${refTimestamp + 5}]`);
 
   try {
     const result = await evolutionPool.query<{
