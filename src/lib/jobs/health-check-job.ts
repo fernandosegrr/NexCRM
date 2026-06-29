@@ -60,23 +60,6 @@ async function fetchEvolutionStatus(
   }
 }
 
-async function tryReconnect(instanciaId: string): Promise<void> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 3000);
-  try {
-    await fetch(
-      `${EVOLUTION_API_URL}/instance/connect/${encodeURIComponent(instanciaId)}`,
-      {
-        headers: { apikey: EVOLUTION_API_KEY },
-        signal: ctrl.signal,
-      },
-    );
-  } catch {
-    /* ignore — reconnect best-effort */
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 async function processInstance(inst: {
   instanciaId: string;
@@ -107,6 +90,29 @@ async function processInstance(inst: {
 
     const detectedAt = now;
 
+    // Notificar al cliente para que regenere el QR
+    const clientUsers = await prisma.user.findMany({
+      where: {
+        businessId: inst.business.id,
+        activo: true,
+        OR: [
+          { businessRoleId: null },
+          { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
+        ],
+      },
+      select: { email: true },
+    });
+    for (const u of clientUsers) {
+      try {
+        await sendEmail({
+          to: u.email,
+          subject: `⚠️ Tu asistente virtual se desconectó — ${businessNombre}`,
+          html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
+        });
+      } catch { /* silencioso */ }
+    }
+
+    // Alerta interna a NexAI ops
     const emailEnviado = await sendAlertEmail({
       subject: `⚠️ Instancia desconectada — ${businessNombre} (${instanciaId})`,
       html: buildAlertHtml({
@@ -118,75 +124,27 @@ async function processInstance(inst: {
       }),
     });
 
-    await tryReconnect(instanciaId);
-    await new Promise((r) => setTimeout(r, 5_000));
-    const reconnectStatus = await fetchEvolutionStatus(instanciaId);
-
-    const tipo      = reconnectStatus === "open" ? "auto-recuperada"    : "intervencion_manual";
-    const resultado = reconnectStatus === "open" ? "exitosa"            : "fallida";
-    const resolvedAt = resultado === "exitosa" ? new Date() : undefined;
-
-    await sendAlertEmail({
-      subject:
-        resultado === "exitosa"
-          ? `✅ Auto-recuperada — ${businessNombre}`
-          : `🔴 Auto-recuperación fallida — ${businessNombre} — REQUIERE ATENCIÓN`,
-      html: buildFollowUpHtml({
-        businessNombre,
-        instanciaId,
-        connectionStatus: reconnectStatus,
-        reconnectResult: resultado === "exitosa" ? "exitosa" : "fallida",
-        detectedAt,
-        resolvedAt,
-        appUrl: APP_URL,
-      }),
-    });
-
-    // Notificar al cliente solo si la reconexión no pudo restaurar el servicio
-    if (reconnectStatus !== "open") {
-      const clientUsers = await prisma.user.findMany({
-        where: {
-          businessId: inst.business.id,
-          activo: true,
-          OR: [
-            { businessRoleId: null },
-            { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
-          ],
-        },
-        select: { email: true },
-      });
-      for (const u of clientUsers) {
-        try {
-          await sendEmail({
-            to: u.email,
-            subject: `⚠️ Tu asistente virtual se desconectó — ${businessNombre}`,
-            html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
-          });
-        } catch { /* silencioso */ }
-      }
-    }
-
     await prisma.incidentLog.create({
       data: {
         instanciaId,
         nombreNegocio: businessNombre,
-        tipo,
+        tipo: "intervencion_manual",
         contactosSinResp: 0,
-        estadoEvolution: reconnectStatus,
-        accion: "reconexion_intentada",
-        resultado,
+        estadoEvolution: connectionStatus,
+        accion: "ninguna",
+        resultado: "pendiente",
         emailEnviado,
-        resolvedAt: resolvedAt ?? null,
+        resolvedAt: null,
       },
     });
 
     return {
       instanciaId,
       negocio: businessNombre,
-      tipo,
-      resultado,
+      tipo: "intervencion_manual",
+      resultado: "pendiente",
       contactosSinResp: 0,
-      estadoEvolution: reconnectStatus,
+      estadoEvolution: connectionStatus,
     };
   }
 
