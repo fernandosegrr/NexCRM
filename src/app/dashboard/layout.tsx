@@ -34,7 +34,10 @@ export default async function DashboardLayout({
     embudo: hasPermission(session.user, "ver_embudo"),
     reportes: hasPermission(session.user, "ver_reportes"),
     campanas: hasPermission(session.user, "gestionar_campanas"),
-    config: hasPermission(session.user, "gestionar_contactos"),
+    config:
+      hasPermission(session.user, "gestionar_contactos") ||
+      hasPermission(session.user, "gestionar_roles") ||
+      hasPermission(session.user, "gestionar_usuarios"),
   };
 
   return (

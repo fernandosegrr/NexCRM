@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, Trash2, GripVertical, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, GripVertical, Edit2, Check, X, Tag, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { hasPermission } from "@/lib/permissions";
 import { AccessDenied } from "@/components/dashboard/access-denied";
+import { EquipoSection } from "@/components/dashboard/equipo-section";
 import ErrorBoundary from "@/components/ui/error-boundary";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   createCustomField,
   updateCustomField,
@@ -65,10 +67,15 @@ function ConfiguracionPageInner() {
   const [editId, setEditId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const canManage =
+  const canFields =
     status === "loading" || !session
       ? null
       : hasPermission(session.user, "gestionar_contactos");
+  const canTeam =
+    status === "loading" || !session
+      ? null
+      : hasPermission(session.user, "gestionar_roles") ||
+        hasPermission(session.user, "gestionar_usuarios");
 
   async function loadFields() {
     try {
@@ -108,11 +115,11 @@ function ConfiguracionPageInner() {
     } catch { /* best effort */ }
   }
 
-  if (canManage === false) {
+  if (canFields === false && canTeam === false) {
     return <AccessDenied mensaje="No tienes acceso a la configuración." />;
   }
 
-  if (loading) {
+  if (canFields === null || canTeam === null || (canFields && loading)) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-sm text-muted-foreground">Cargando...</p>
@@ -120,11 +127,8 @@ function ConfiguracionPageInner() {
     );
   }
 
-  return (
-    <div
-      className="mx-auto h-full w-full max-w-2xl space-y-6 overflow-y-auto p-4 sm:p-6"
-      style={{ WebkitOverflowScrolling: "touch" }}
-    >
+  const camposContent = (
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Campos personalizados</h1>
@@ -173,6 +177,36 @@ function ConfiguracionPageInner() {
           setShowNew(false);
         }}
       />
+    </div>
+  );
+
+  const equipoContent = session?.user?.businessId ? (
+    <EquipoSection businessId={session.user.businessId} />
+  ) : null;
+
+  return (
+    <div
+      className="mx-auto h-full w-full max-w-2xl overflow-y-auto p-4 sm:p-6"
+      style={{ WebkitOverflowScrolling: "touch" }}
+    >
+      {canFields && canTeam ? (
+        <Tabs defaultValue="campos" className="w-full">
+          <TabsList>
+            <TabsTrigger value="campos" className="gap-1.5">
+              <Tag className="size-4" /> Campos
+            </TabsTrigger>
+            <TabsTrigger value="equipo" className="gap-1.5">
+              <Users className="size-4" /> Equipo
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="campos">{camposContent}</TabsContent>
+          <TabsContent value="equipo">{equipoContent}</TabsContent>
+        </Tabs>
+      ) : canTeam ? (
+        equipoContent
+      ) : (
+        camposContent
+      )}
     </div>
   );
 }

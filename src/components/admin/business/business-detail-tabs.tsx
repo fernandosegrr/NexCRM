@@ -5,18 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   BarChart2,
   Bot,
-  Check,
   CreditCard,
   Filter,
   Loader2,
-  MoreVertical,
-  Plus,
   Settings,
-  Shield,
-  Trash2,
   UserCog,
   Users,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,21 +20,13 @@ import {
   updateModoClasificacion,
   updateBuscarMediaEvolution,
 } from "@/app/actions/businesses";
-import {
-  createBusinessRole,
-  updateBusinessRole,
-  deleteBusinessRole,
-  inviteTeamMember,
-  updateMemberRole,
-  setMemberActivo,
-  resetMemberPassword,
-} from "@/app/actions/team";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CopyButton } from "@/components/copy-button";
 import { DownloadButton } from "@/components/download-button";
 import { EditBusinessDrawer } from "@/components/admin/business/edit-business-drawer";
 import { FunnelStageManager } from "@/components/admin/business/funnel-stage-manager";
 import { EmbudoStatsSection } from "@/components/admin/business/embudo-stats-section";
+import { EquipoTab, type TeamMember, type BusinessRoleWithCount } from "@/components/team/equipo-tab";
 import {
   PaymentsTab,
   type PaymentConfigDTO,
@@ -56,17 +42,9 @@ import { EmbudoConversionChart } from "@/components/charts/embudo-conversion";
 import { SeguimientoStatsChart } from "@/components/charts/seguimiento-stats";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -74,23 +52,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { isCanal } from "@/lib/channels";
-import {
-  PERMISOS_POR_CATEGORIA,
-  PERMISO_LABELS,
-  TODOS_LOS_PERMISOS,
-  type Permiso,
-} from "@/lib/permissions";
 import type {
   FunnelStageDTO,
   BusinessMetrics,
@@ -112,24 +77,6 @@ type BusinessInstance = {
 };
 
 type Snippet = { inicio: string; inicioOff: string; humanReply: string; fin: string };
-
-type TeamMember = {
-  id: string;
-  nombre: string;
-  email: string;
-  activo: boolean;
-  businessRoleId: string | null;
-  businessRole: { nombre: string } | null;
-};
-
-type BusinessRoleWithCount = {
-  id: string;
-  businessId: string;
-  nombre: string;
-  permisos: string[];
-  creadoAt: Date;
-  _count: { usuarios: number };
-};
 
 export type BusinessDetailTabsProps = {
   business: {
@@ -875,449 +822,6 @@ function BotTab({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Tab Equipo ────────────────────────────────────────────────────────────
-
-function RoleDrawer({
-  businessId,
-  role,
-  onDone,
-}: {
-  businessId: string;
-  role?: BusinessRoleWithCount;
-  onDone: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [nombre, setNombre] = useState(role?.nombre ?? "");
-  const [selectedPermisos, setSelectedPermisos] = useState<Set<string>>(
-    new Set(role?.permisos ?? []),
-  );
-  const [pending, start] = useTransition();
-
-  function togglePermiso(p: string) {
-    setSelectedPermisos((prev) => {
-      const next = new Set(prev);
-      if (next.has(p)) next.delete(p);
-      else next.add(p);
-      return next;
-    });
-  }
-
-  function handleOpen(v: boolean) {
-    if (v) {
-      setNombre(role?.nombre ?? "");
-      setSelectedPermisos(new Set(role?.permisos ?? []));
-    }
-    setOpen(v);
-  }
-
-  function handleSubmit() {
-    start(async () => {
-      const data = { nombre, permisos: Array.from(selectedPermisos) };
-      const r = role
-        ? await updateBusinessRole(role.id, data)
-        : await createBusinessRole(businessId, data);
-      if (r.ok) {
-        toast.success(role ? "Rol actualizado." : "Rol creado.");
-        setOpen(false);
-        onDone();
-      } else {
-        toast.error(r.error ?? "No se pudo guardar el rol.");
-      }
-    });
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={handleOpen}>
-      <SheetTrigger asChild>
-        {role ? (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
-            Editar
-          </DropdownMenuItem>
-        ) : (
-          <Button size="sm" variant="outline">
-            <Plus className="size-4 mr-1.5" /> Nuevo rol
-          </Button>
-        )}
-      </SheetTrigger>
-      <SheetContent side="right" className="flex w-full flex-col overflow-hidden sm:max-w-lg">
-        <SheetHeader className="shrink-0">
-          <SheetTitle>{role ? "Editar rol" : "Nuevo rol"}</SheetTitle>
-        </SheetHeader>
-        <div className="flex-1 overflow-y-auto py-4">
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="role-nombre">Nombre del rol</Label>
-              <Input
-                id="role-nombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="ej: Supervisor"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-sm font-medium">Permisos</p>
-              {Object.entries(PERMISOS_POR_CATEGORIA).map(([cat, permisos]) => (
-                <div key={cat} className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {cat}
-                  </p>
-                  {permisos.map((p) => (
-                    <div key={p} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={p}
-                        checked={selectedPermisos.has(p)}
-                        onCheckedChange={() => togglePermiso(p)}
-                      />
-                      <Label htmlFor={p} className="text-sm font-normal cursor-pointer">
-                        {PERMISO_LABELS[p as Permiso]}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="shrink-0 border-t bg-background pt-4 pb-2">
-          <Button
-            onClick={handleSubmit}
-            disabled={pending || !nombre.trim()}
-            className="w-full"
-          >
-            {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {role ? "Guardar cambios" : "Crear rol"}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function MemberDrawer({
-  businessId,
-  member,
-  roles,
-  onDone,
-}: {
-  businessId: string;
-  member?: TeamMember;
-  roles: BusinessRoleWithCount[];
-  onDone: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [nombre, setNombre] = useState(member?.nombre ?? "");
-  const [email, setEmail] = useState(member?.email ?? "");
-  const [password, setPassword] = useState("");
-  const [roleId, setRoleId] = useState(member?.businessRoleId ?? "");
-  const [pending, start] = useTransition();
-
-  function handleSubmit() {
-    start(async () => {
-      if (!member) {
-        const r = await inviteTeamMember(businessId, {
-          nombre,
-          email,
-          password,
-          businessRoleId: roleId,
-        });
-        if (r.ok) {
-          toast.success("Miembro agregado.");
-          setOpen(false);
-          onDone();
-        } else {
-          toast.error(r.error ?? "No se pudo agregar el miembro.");
-        }
-      }
-    });
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        {member ? (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
-            Cambiar contraseña
-          </DropdownMenuItem>
-        ) : (
-          <Button size="sm" variant="outline">
-            <Plus className="size-4 mr-1.5" /> Agregar miembro
-          </Button>
-        )}
-      </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>{member ? "Cambiar contraseña" : "Agregar miembro"}</SheetTitle>
-        </SheetHeader>
-        <div className="space-y-5 p-6">
-          {!member && (
-            <>
-              <div className="space-y-2">
-                <Label>Nombre</Label>
-                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Juan Pérez" className="w-full" />
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="juan@empresa.com" className="w-full" />
-              </div>
-            </>
-          )}
-          <div className="space-y-2">
-            <Label>{member ? "Nueva contraseña" : "Contraseña temporal"}</Label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              autoComplete="new-password"
-              className="w-full"
-            />
-          </div>
-          {!member && (
-            <div className="space-y-2">
-              <Label>Rol</Label>
-              <Select value={roleId} onValueChange={setRoleId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccionar rol" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <Button
-            onClick={member ? async () => {
-              start(async () => {
-                const r = await resetMemberPassword(member.id, password);
-                if (r.ok) { toast.success("Contraseña actualizada."); setOpen(false); onDone(); }
-                else toast.error(r.error ?? "No se pudo cambiar.");
-              });
-            } : handleSubmit}
-            disabled={pending || password.length < 6 || (!member && (!nombre || !email || !roleId))}
-            className="w-full mt-2"
-            size="lg"
-          >
-            {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {member ? "Guardar contraseña" : "Agregar miembro"}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function EquipoTab({
-  businessId,
-  initialMembers,
-  initialRoles,
-}: {
-  businessId: string;
-  initialMembers: TeamMember[];
-  initialRoles: BusinessRoleWithCount[];
-}) {
-  const [members, setMembers] = useState(initialMembers);
-  const [roles, setRoles] = useState(initialRoles);
-  const [pending, start] = useTransition();
-  const router = useRouter();
-
-  // Mantener el estado local en sync cuando router.refresh() trae props nuevas.
-  useEffect(() => setMembers(initialMembers), [initialMembers]);
-  useEffect(() => setRoles(initialRoles), [initialRoles]);
-
-  async function refresh() {
-    // El server action ya revalida vía revalidatePath; con router.refresh()
-    // basta para traer datos frescos sin perder el tab seleccionado ni
-    // forzar un reload completo de la página (window.location.reload()).
-    router.refresh();
-  }
-
-  function handleDeleteRole(roleId: string) {
-    start(async () => {
-      const r = await deleteBusinessRole(roleId);
-      if (r.ok) {
-        toast.success("Rol eliminado.");
-        setRoles((prev) => prev.filter((r) => r.id !== roleId));
-      } else {
-        toast.error(r.error ?? "No se pudo eliminar.");
-      }
-    });
-  }
-
-  function handleToggleMember(userId: string, activo: boolean) {
-    start(async () => {
-      const r = await setMemberActivo(userId, activo);
-      if (r.ok) {
-        toast.success(activo ? "Usuario activado." : "Usuario desactivado.");
-        setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, activo } : m));
-      } else {
-        toast.error(r.error ?? "No se pudo actualizar.");
-      }
-    });
-  }
-
-  return (
-    <div className="space-y-10">
-      {/* Sección Roles */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Roles</h2>
-            <p className="text-sm text-muted-foreground">
-              Define los permisos de cada tipo de usuario.
-            </p>
-          </div>
-          <RoleDrawer businessId={businessId} onDone={refresh} />
-        </div>
-
-        {roles.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            Sin roles creados. Crea el primero.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {roles.map((role) => {
-              const preview = role.permisos.slice(0, 3);
-              const extra = role.permisos.length - 3;
-              return (
-                <div
-                  key={role.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
-                >
-                  <Shield className="size-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{role.nombre}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {role._count.usuarios} usuario{role._count.usuarios !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {preview.map((p) => (
-                      <Badge key={p} variant="secondary" className="text-[10px]">
-                        {PERMISO_LABELS[p as Permiso] ?? p}
-                      </Badge>
-                    ))}
-                    {extra > 0 && (
-                      <Badge variant="muted" className="text-[10px]">
-                        y {extra} más
-                      </Badge>
-                    )}
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="size-8 shrink-0">
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <RoleDrawer businessId={businessId} role={role} onDone={refresh} />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        disabled={role._count.usuarios > 0 || pending}
-                        onSelect={() => handleDeleteRole(role.id)}
-                      >
-                        <Trash2 className="size-4 mr-2" />
-                        Eliminar
-                        {role._count.usuarios > 0 && (
-                          <span className="ml-2 text-muted-foreground text-xs">(con usuarios)</span>
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Sección Miembros */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Miembros</h2>
-            <p className="text-sm text-muted-foreground">
-              Usuarios con acceso al dashboard de este negocio.
-            </p>
-          </div>
-          <MemberDrawer businessId={businessId} roles={roles} onDone={refresh} />
-        </div>
-
-        {members.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            Sin miembros. Agrega el primero.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {members.map((m) => {
-              const initial = m.nombre.charAt(0).toUpperCase();
-              return (
-                <div
-                  key={m.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{m.nombre}</p>
-                    <p className="text-xs text-muted-foreground truncate">{m.email}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {m.businessRole && (
-                      <Badge variant="secondary" className="text-xs">
-                        {m.businessRole.nombre}
-                      </Badge>
-                    )}
-                    <Badge
-                      variant={m.activo ? "success" : "muted"}
-                      className="text-[10px]"
-                    >
-                      {m.activo ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="size-8 shrink-0">
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <MemberDrawer
-                        businessId={businessId}
-                        member={m}
-                        roles={roles}
-                        onDone={refresh}
-                      />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={pending}
-                        onSelect={() => handleToggleMember(m.id, !m.activo)}
-                        className={!m.activo ? "" : "text-destructive focus:text-destructive"}
-                      >
-                        {m.activo ? (
-                          <><X className="size-4 mr-2" />Desactivar acceso</>
-                        ) : (
-                          <><Check className="size-4 mr-2" />Activar acceso</>
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
