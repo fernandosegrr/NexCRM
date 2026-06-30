@@ -1,8 +1,8 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
-import { n8nPool } from "@/lib/n8n";
 import { sendEmail, buildSuggestionHtml } from "@/lib/email";
 import { upsertContactStageOptimistic } from "@/lib/contact-stage";
+import { insertBotMemory } from "@/lib/bot-memory";
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
@@ -82,21 +82,6 @@ async function sendMeta(
     clearTimeout(timer);
     throw e;
   }
-}
-
-async function insertBotMemory(
-  tablaMemoria: string,
-  uidUsuario: string,
-  canal: string,
-  text: string,
-): Promise<void> {
-  if (!/^[a-zA-Z0-9_]+$/.test(tablaMemoria)) return;
-  const sessionId =
-    canal === "whatsapp" ? `${uidUsuario}@s.whatsapp.net` : uidUsuario;
-  await n8nPool.query(
-    `INSERT INTO "${tablaMemoria}" (session_id, message) VALUES ($1, $2)`,
-    [sessionId, JSON.stringify({ type: "ai", content: text })],
-  );
 }
 
 async function processContact(params: {
@@ -355,7 +340,7 @@ Criterios para enviar=false:
     // PASO 6: Insertar en memoria del bot
     if (business.tablaMemoria) {
       try {
-        await insertBotMemory(business.tablaMemoria, contact.uidUsuario, contact.canal, mensajeEnviado);
+        await insertBotMemory(business.tablaMemoria, contact.uidUsuario, contact.canal, "ai", mensajeEnviado);
       } catch {
         // skip silencioso
       }

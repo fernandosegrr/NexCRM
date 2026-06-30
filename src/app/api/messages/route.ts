@@ -6,6 +6,8 @@ import { uploadBase64, uploadFromUrl } from "@/lib/cloudinary";
 import { buscarMediaEnviada } from "@/lib/evolution-db";
 import { resolveContact } from "@/lib/contact-resolver";
 import { classifyContact } from "@/lib/funnel-classifier";
+import { getBotStatus } from "@/lib/n8n";
+import { insertBotMemory } from "@/lib/bot-memory";
 
 /** Asigna la primera etapa del embudo al primer mensaje de usuario. Sin GPT. */
 async function maybeAssignFirstStage(
@@ -173,7 +175,7 @@ export async function POST(req: NextRequest) {
   try {
     const inst = await prisma.businessInstance.findFirst({
       where: { instanciaId: d.instanciaId },
-      include: { business: { select: { id: true, nombre: true } } },
+      include: { business: { select: { id: true, nombre: true, tablaMemoria: true } } },
     });
 
     if (!inst) {
@@ -324,6 +326,28 @@ export async function POST(req: NextRequest) {
           // Nunca bloquea ni rompe la ingesta del bot.
         }
       })();
+
+      // Si el bot está pausado, su nodo de memoria (LangChain) nunca corre para
+      // este mensaje → lo registramos nosotros. Si está activo, el propio flujo
+      // de n8n ya lo graba al pasar por el AI Agent (no duplicar).
+      if (d.contenido && inst.business.tablaMemoria) {
+        void (async () => {
+          try {
+            const activo = await getBotStatus(d.instanciaId, normalizedUid);
+            if (!activo) {
+              await insertBotMemory(
+                inst.business.tablaMemoria!,
+                normalizedUid,
+                inst.canal,
+                "human",
+                d.contenido!,
+              );
+            }
+          } catch (err) {
+            console.error("[bot-memory] Error registrando mensaje entrante:", err);
+          }
+        })();
+      }
     }
 
     const response = NextResponse.json({ id: msg.id.toString() }, { status: 201 });

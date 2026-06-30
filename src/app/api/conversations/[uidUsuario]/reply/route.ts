@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { META_VERSION, metaHost } from "@/lib/meta";
 import { callerCan } from "@/lib/permissions-server";
+import { getBotStatus } from "@/lib/n8n";
+import { insertBotMemory } from "@/lib/bot-memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -220,7 +222,7 @@ export async function POST(
 
   const inst = await prisma.businessInstance.findFirst({
     where: { instanciaId },
-    include: { business: { select: { id: true, nombre: true } } },
+    include: { business: { select: { id: true, nombre: true, tablaMemoria: true } } },
   });
 
   if (!inst) {
@@ -293,6 +295,30 @@ export async function POST(
     },
     select: { id: true, enviadoAt: true },
   });
+
+  // Si el bot está pausado, esta respuesta humana nunca pasa por el flujo de
+  // n8n (no hay forma de que ya quede en su memoria) → la registramos para que
+  // el bot tenga contexto si se reactiva. Si el bot está activo, no debería
+  // estar respondiendo un humano por aquí, pero por seguridad igual lo
+  // condicionamos a "pausado" para no duplicar con el nodo de memoria de n8n.
+  if (sent && contenido && inst.business.tablaMemoria) {
+    void (async () => {
+      try {
+        const activo = await getBotStatus(instanciaId, uidUsuario);
+        if (!activo) {
+          await insertBotMemory(
+            inst.business.tablaMemoria!,
+            uidUsuario,
+            inst.canal,
+            "ai",
+            contenido,
+          );
+        }
+      } catch (err) {
+        console.error("[bot-memory] Error registrando respuesta humana:", err);
+      }
+    })();
+  }
 
   return NextResponse.json(
     {
