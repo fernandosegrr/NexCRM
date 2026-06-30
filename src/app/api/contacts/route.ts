@@ -38,6 +38,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
       etiquetas: { where: { businessId: session.user.businessId } },
       camposCustom: {
+        where: { field: { businessId: session.user.businessId } },
         include: { field: { select: { id: true, nombre: true, tipo: true, opciones: true } } },
       },
     },

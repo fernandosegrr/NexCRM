@@ -7,6 +7,26 @@ export const dynamic = "force-dynamic";
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
 
+// Coincide con el `accept` del input de adjuntos (reply-input.tsx): imagen,
+// audio, video y documentos de oficina. Cualquier otro mimetype se rechaza
+// para no usar Cloudinary como hosting genérico de archivos arbitrarios.
+const ALLOWED_DOC_MIMETYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+function isAllowedMimetype(mimeType: string): boolean {
+  return (
+    mimeType.startsWith("image/") ||
+    mimeType.startsWith("audio/") ||
+    mimeType.startsWith("video/") ||
+    ALLOWED_DOC_MIMETYPES.has(mimeType)
+  );
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
@@ -26,6 +46,9 @@ export async function POST(req: NextRequest) {
   }
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: "Archivo demasiado grande (máx 25 MB)" }, { status: 413 });
+  }
+  if (!isAllowedMimetype(file.type)) {
+    return NextResponse.json({ error: "Tipo de archivo no permitido" }, { status: 415 });
   }
 
   const folder = (formData.get("folder") as string | null) ?? "crm-replies";

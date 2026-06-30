@@ -6,6 +6,7 @@ import {
   buildFollowUpHtml,
   sendEmail,
   buildClientDisconnectHtml,
+  buildMetaTokenExpiringHtml,
 } from "@/lib/email";
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
@@ -404,6 +405,67 @@ export type HealthCheckResult = {
   resultados: InstanceResult[];
 };
 
+// Aviso proactivo de expiración del token de Instagram (vence cada 60 días,
+// se renueva manualmente — antes solo se veía si un ADMIN abría el panel).
+const META_TOKEN_WARNING_DAYS = 7;
+
+async function checkMetaTokenExpirations(): Promise<void> {
+  const warningThreshold = new Date(Date.now() + META_TOKEN_WARNING_DAYS * 24 * 60 * 60_000);
+
+  const instances = await prisma.businessInstance.findMany({
+    where: {
+      canal: "instagram",
+      activo: true,
+      business: { activo: true },
+      metaTokenExpiresAt: { not: null, lte: warningThreshold },
+    },
+    include: { business: { select: { id: true, nombre: true } } },
+  });
+
+  for (const inst of instances) {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60_000);
+    const alreadyAlertedToday = await prisma.incidentLog.findFirst({
+      where: {
+        instanciaId: inst.instanciaId,
+        tipo: "meta_token_expirando",
+        creadoAt: { gte: oneDayAgo },
+      },
+      select: { id: true },
+    });
+    if (alreadyAlertedToday) continue;
+
+    const expiresAt = inst.metaTokenExpiresAt!;
+    const diasRestantes = Math.ceil((expiresAt.getTime() - Date.now()) / (24 * 60 * 60_000));
+
+    const emailEnviado = await sendAlertEmail({
+      subject:
+        diasRestantes <= 0
+          ? `⚠️ Token de Instagram expirado — ${inst.business.nombre}`
+          : `⚠️ Token de Instagram expira en ${diasRestantes}d — ${inst.business.nombre}`,
+      html: buildMetaTokenExpiringHtml({
+        businessNombre: inst.business.nombre,
+        businessId: inst.business.id,
+        diasRestantes,
+        appUrl: APP_URL,
+      }),
+    });
+
+    await prisma.incidentLog.create({
+      data: {
+        instanciaId: inst.instanciaId,
+        nombreNegocio: inst.business.nombre,
+        tipo: "meta_token_expirando",
+        contactosSinResp: 0,
+        estadoEvolution: "n/a",
+        accion: "ninguna",
+        resultado: "pendiente",
+        emailEnviado,
+        resolvedAt: diasRestantes <= 0 ? null : new Date(),
+      },
+    });
+  }
+}
+
 export async function runHealthCheckJob(): Promise<HealthCheckResult> {
   // Obtener instancias WhatsApp activas con su negocio activo
   const instances = await prisma.businessInstance.findMany({
@@ -421,6 +483,10 @@ export async function runHealthCheckJob(): Promise<HealthCheckResult> {
       if (r) resultados.push(r);
     }
   }
+
+  await checkMetaTokenExpirations().catch((err) => {
+    console.error("[health] error revisando expiración de tokens Meta:", err);
+  });
 
   return {
     instanciasRevisadas: instances.length,

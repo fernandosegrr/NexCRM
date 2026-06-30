@@ -38,6 +38,23 @@ function revalidateFunnelViews(businessId: string) {
   revalidatePath("/dashboard/embudo");
 }
 
+/**
+ * Verifica que instanciaId pertenezca a una BusinessInstance de ese negocio.
+ * Contact no tiene businessId propio (solo instanciaId+uidUsuario), así que
+ * cualquier mutación de ContactStage/sugerencia debe cruzar instanciaId
+ * contra el negocio del llamador antes de tocar el contacto.
+ */
+async function assertInstanceOwnership(
+  instanciaId: string,
+  businessId: string,
+): Promise<boolean> {
+  const inst = await prisma.businessInstance.findFirst({
+    where: { instanciaId, businessId },
+    select: { id: true },
+  });
+  return !!inst;
+}
+
 const DEFAULT_FUNNEL_STAGES = [
   {
     nombre: "Nuevo Lead",
@@ -381,7 +398,17 @@ export async function deleteFunnelStage(
 
 /** Cuántos contactos tiene asignados una etapa (para el diálogo de borrado). */
 export async function countContactsInStage(stageId: string): Promise<number> {
+  const session = await requireSession();
+  if (!session) return 0;
   try {
+    const stage = await prisma.funnelStage.findUnique({
+      where: { id: stageId },
+      select: { businessId: true },
+    });
+    if (!stage) return 0;
+    if (session.user.rol !== "ADMIN" && session.user.businessId !== stage.businessId) {
+      return 0;
+    }
     return await prisma.contactStage.count({ where: { stageId } });
   } catch {
     return 0;
@@ -431,6 +458,10 @@ export async function upsertContactStage(
 
   if (!(await callerCan("mover_contactos"))) {
     return { ok: false, error: "No tienes permiso para mover contactos." };
+  }
+
+  if (!(await assertInstanceOwnership(instanciaId, businessId))) {
+    return { ok: false, error: "Instancia no autorizada para este negocio." };
   }
 
   try {
@@ -498,6 +529,10 @@ export async function applyStageSuggestion(
 
   if (!(await callerCan("mover_contactos"))) {
     return { ok: false, error: "No tienes permiso para mover contactos." };
+  }
+
+  if (!(await assertInstanceOwnership(instanciaId, businessId))) {
+    return { ok: false, error: "Instancia no autorizada para este negocio." };
   }
 
   try {
@@ -579,6 +614,14 @@ export async function dismissStageSuggestion(
   if (!session) return { ok: false, error: "No autorizado." };
   if (session.user.rol !== "ADMIN" && session.user.businessId !== businessId) {
     return { ok: false, error: "No autorizado." };
+  }
+
+  if (!(await callerCan("mover_contactos"))) {
+    return { ok: false, error: "No tienes permiso para mover contactos." };
+  }
+
+  if (!(await assertInstanceOwnership(instanciaId, businessId))) {
+    return { ok: false, error: "Instancia no autorizada para este negocio." };
   }
 
   try {

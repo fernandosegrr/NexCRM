@@ -211,7 +211,12 @@ export async function POST(
     );
   }
 
-  const uidUsuario = decodeURIComponent(params.uidUsuario);
+  let uidUsuario: string;
+  try {
+    uidUsuario = decodeURIComponent(params.uidUsuario);
+  } catch {
+    return NextResponse.json({ error: "uid inválido" }, { status: 400 });
+  }
 
   const inst = await prisma.businessInstance.findFirst({
     where: { instanciaId },

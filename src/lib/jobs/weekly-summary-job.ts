@@ -274,8 +274,16 @@ export async function runWeeklySummaryJob(): Promise<WeeklySummaryResult> {
   let procesados = 0;
   for (let i = 0; i < businesses.length; i += 3) {
     const batch = businesses.slice(i, i + 3);
-    await Promise.all(batch.map(processBusinessSummary));
-    procesados += batch.length;
+    // allSettled (no Promise.all): que un negocio falle no debe abortar el
+    // resto del batch ni cortar el loop para los batches siguientes.
+    const results = await Promise.allSettled(batch.map(processBusinessSummary));
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        procesados++;
+      } else {
+        console.error("[weekly-summary] fallo procesando negocio:", r.reason);
+      }
+    }
   }
 
   return { ok: true, negociosProcesados: procesados };

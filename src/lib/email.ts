@@ -203,6 +203,59 @@ export function buildClientDisconnectHtml({
 </html>`;
 }
 
+// Alerta interna (NexAI ops, no el cliente): el token de Instagram se
+// renueva manualmente desde Negocios → [negocio] → Credenciales Meta, panel
+// exclusivo de ADMIN — el cliente no tiene acceso a esa pantalla.
+export function buildMetaTokenExpiringHtml({
+  businessNombre,
+  businessId,
+  diasRestantes,
+  appUrl,
+}: {
+  businessNombre: string;
+  businessId: string;
+  diasRestantes: number;
+  appUrl: string;
+}): string {
+  const yaExpirado = diasRestantes <= 0;
+  const tituloEstado = yaExpirado
+    ? "Token de Instagram expirado"
+    : `Token de Instagram expira en ${diasRestantes} día(s)`;
+  return `<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#f9fafb;font-family:sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+  <tr>
+    <td style="background:#f59e0b;padding:20px 28px;">
+      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">⚠️ ${tituloEstado}</p>
+      <p style="margin:4px 0 0;color:#fef3c7;font-size:14px;">${businessNombre}</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:28px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#111827;line-height:1.6;">
+        Los tokens de acceso de Instagram vencen cada <strong>60 días</strong> y deben renovarse manualmente.
+        ${yaExpirado ? "El asistente de Instagram de este negocio <strong>ya dejó de poder enviar mensajes</strong>." : "Si no se renueva a tiempo, el asistente de Instagram de este negocio dejará de poder enviar mensajes."}
+      </p>
+      <div style="margin:24px 0;padding:20px;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd;">
+        <p style="margin:0 0 12px;font-size:13px;color:#374151;">
+          Genera un nuevo token de larga duración y guárdalo desde Credenciales Meta.
+        </p>
+        <a href="${appUrl}/admin/negocios/${businessId}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:600;">
+          Ir al negocio →
+        </a>
+      </div>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 // ── Pagos / cobros ─────────────────────────────────────────────────────────
 
 export type PaymentEmailTipo =
@@ -626,8 +679,11 @@ export function buildSuggestionHtml({
   logId: string;
   appUrl: string;
 }): string {
+  // Ambos botones llevan a la página de confirmación (requiere clic real +
+  // POST) en vez de ejecutar la acción directo en un GET — un GET directo es
+  // vulnerable a prefetch de clientes de correo/escáneres de seguridad.
   const approveUrl = `${appUrl}/follow-up/approve?logId=${encodeURIComponent(logId)}`;
-  const discardUrl = `${appUrl}/api/follow-up/approve-link?logId=${encodeURIComponent(logId)}&action=discard`;
+  const discardUrl = approveUrl;
 
   const canalLabel =
     canal === "whatsapp" ? "📱 WhatsApp" : canal === "instagram" ? "📸 Instagram" : "💬 Messenger";

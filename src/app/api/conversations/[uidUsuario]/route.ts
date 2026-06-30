@@ -17,7 +17,12 @@ export async function GET(
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const uidUsuario = decodeURIComponent(params.uidUsuario);
+  let uidUsuario: string;
+  try {
+    uidUsuario = decodeURIComponent(params.uidUsuario);
+  } catch {
+    return NextResponse.json({ error: "uid inválido" }, { status: 400 });
+  }
   const { searchParams } = new URL(req.url);
   const instanciaId = searchParams.get("instanciaId") ?? "";
   if (!instanciaId) {

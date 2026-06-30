@@ -29,6 +29,11 @@ export function startScheduler() {
   // Asegurar que existan los registros de cron (idempotente, no bloqueante).
   void ensureCronRecords();
 
+  // Liberar campañas que hayan quedado con procesando:true porque el proceso
+  // anterior murió a mitad de envío (deploy, OOM, crash) — sin esto, esas
+  // campañas nunca vuelven a ser recogidas por runCampaignsJob.
+  void resetStaleCampaignLocks();
+
   // ── Health check: cada 5 minutos ──────────────────────────────
   cron.schedule("*/5 * * * *", () => {
     void runJob("health-check", runHealthCheck, 4 * MINUTE);
@@ -73,6 +78,20 @@ async function ensureCronRecords() {
     });
   } catch (err) {
     console.error("[Scheduler] No se pudieron asegurar registros de cron:", err);
+  }
+}
+
+async function resetStaleCampaignLocks() {
+  try {
+    const { count } = await prisma.campaign.updateMany({
+      where: { estado: "enviando", procesando: true },
+      data: { procesando: false },
+    });
+    if (count > 0) {
+      console.log(`[Scheduler] ${count} campaña(s) con lock huérfano liberado(s) al arrancar.`);
+    }
+  } catch (err) {
+    console.error("[Scheduler] No se pudieron liberar locks de campañas:", err);
   }
 }
 

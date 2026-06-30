@@ -8,9 +8,8 @@ export const maxDuration = 60;
 // Endpoint de testing manual. La ejecución programada la dispara el scheduler
 // interno (src/lib/scheduler.ts) directamente con runFollowUpJob().
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   try {

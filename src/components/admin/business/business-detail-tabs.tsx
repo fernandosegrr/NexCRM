@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   BarChart2,
   Bot,
@@ -1126,10 +1127,17 @@ function EquipoTab({
   const [members, setMembers] = useState(initialMembers);
   const [roles, setRoles] = useState(initialRoles);
   const [pending, start] = useTransition();
+  const router = useRouter();
+
+  // Mantener el estado local en sync cuando router.refresh() trae props nuevas.
+  useEffect(() => setMembers(initialMembers), [initialMembers]);
+  useEffect(() => setRoles(initialRoles), [initialRoles]);
 
   async function refresh() {
-    // Revalidación pasa por revalidatePath del server action; forzar reload de la sección
-    window.location.reload();
+    // El server action ya revalida vía revalidatePath; con router.refresh()
+    // basta para traer datos frescos sin perder el tab seleccionado ni
+    // forzar un reload completo de la página (window.location.reload()).
+    router.refresh();
   }
 
   function handleDeleteRole(roleId: string) {

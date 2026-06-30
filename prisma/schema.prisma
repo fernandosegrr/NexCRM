@@ -385,6 +385,7 @@ model Payment {
   notas         String?
   creadoAt      DateTime      @default(now())
 
+  @@unique([configId, periodo])
   @@index([businessId])
   @@index([configId])
   @@map("payments")

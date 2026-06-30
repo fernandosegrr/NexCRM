@@ -125,7 +125,17 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   const ingestToken = process.env.MESSAGES_INGEST_TOKEN;
-  if (ingestToken) {
+  if (!ingestToken) {
+    if (process.env.NODE_ENV === "production") {
+      // Sin token configurado, este endpoint queda abierto a cualquiera en
+      // internet que conozca un instanciaId. En producción es preferible
+      // rechazar la ingesta (el bot reintentará) a aceptar mensajes sin auth.
+      console.error(
+        "[messages] MESSAGES_INGEST_TOKEN no está configurado en producción; rechazando ingesta.",
+      );
+      return NextResponse.json({ error: "Servidor mal configurado." }, { status: 503 });
+    }
+  } else {
     const auth = req.headers.get("authorization");
     if (auth !== `Bearer ${ingestToken}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

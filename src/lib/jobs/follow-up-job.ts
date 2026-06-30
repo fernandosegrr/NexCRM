@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { n8nPool } from "@/lib/n8n";
 import { sendEmail, buildSuggestionHtml } from "@/lib/email";
+import { upsertContactStageOptimistic } from "@/lib/contact-stage";
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
@@ -384,11 +385,7 @@ Criterios para enviar=false:
     if (aiResponse.cambioEtapa && aiResponse.etapaDetectada) {
       const newStage = business.etapas.find((e) => e.nombre === aiResponse.etapaDetectada);
       if (newStage) {
-        await prisma.contactStage.upsert({
-          where: { contactId_businessId: { contactId: contact.id, businessId: business.id } },
-          create: { contactId: contact.id, stageId: newStage.id, businessId: business.id },
-          update: { stageId: newStage.id, asignadoAt: new Date() },
-        });
+        await upsertContactStageOptimistic(contact.id, business.id, newStage.id, new Date());
       }
     }
 

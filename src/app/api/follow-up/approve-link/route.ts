@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { n8nPool } from "@/lib/n8n";
+import { isFollowUpLogExpired } from "@/lib/follow-up-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,12 +125,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       instanciaId: true,
       mensajeEnviado: true,
       aprobado: true,
+      creadoAt: true,
       contact: { select: { nombre: true } },
     },
   });
 
   if (!log) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   if (log.aprobado !== null) return NextResponse.json({ error: "Ya procesada" }, { status: 409 });
+  if (isFollowUpLogExpired(log.creadoAt)) {
+    return NextResponse.json({ error: "Enlace expirado" }, { status: 410 });
+  }
 
   if (action === "discard") {
     await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
@@ -193,104 +198,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ ok: true, action: "approve" });
 }
 
+// GET ya no ejecuta acciones con efectos secundarios (enviar mensaje / marcar
+// descartada): clientes de correo y escáneres de seguridad (Outlook Safe
+// Links, Gmail, antivirus corporativos) hacen prefetch automático de los
+// links de un email, lo que dispararía la acción real sin que el humano
+// haya hecho clic. Se redirige a la página de confirmación, que exige un
+// clic explícito (POST) para aprobar o descartar. Mantiene compatibilidad
+// con links de emails ya enviados antes de este cambio.
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
   const logId = searchParams.get("logId");
-  const action = searchParams.get("action");
 
-  if (!logId || (action !== "approve" && action !== "discard")) {
+  if (!logId) {
     return htmlPage("⚠️", "Enlace inválido", "Los parámetros del enlace son incorrectos.", "#dc2626");
   }
 
-  const log = await prisma.followUpLog.findUnique({
-    where: { id: logId },
-    select: {
-      id: true,
-      businessId: true,
-      stageId: true,
-      canal: true,
-      uidUsuario: true,
-      instanciaId: true,
-      mensajeEnviado: true,
-      aprobado: true,
-      contact: { select: { nombre: true } },
-    },
-  });
-
-  if (!log) {
-    return htmlPage("⚠️", "Enlace inválido", "No se encontró la sugerencia.", "#dc2626");
-  }
-
-  if (log.aprobado !== null) {
-    return htmlPage("ℹ️", "Ya procesada", "Esta sugerencia ya fue procesada anteriormente.", "#6b7280");
-  }
-
-  if (action === "discard") {
-    await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
-    return htmlPage("✓", "Sugerencia descartada", "La sugerencia fue descartada correctamente.");
-  }
-
-  // action === "approve"
-  if (!log.mensajeEnviado) {
-    return htmlPage("⚠️", "Error", "No hay mensaje configurado para enviar.", "#dc2626");
-  }
-
-  try {
-    if (log.canal === "whatsapp") {
-      await sendWhatsApp(log.instanciaId, log.uidUsuario, log.mensajeEnviado);
-    } else {
-      const inst = await prisma.businessInstance.findFirst({
-        where: { instanciaId: log.instanciaId, canal: log.canal },
-        select: { metaPageId: true, metaPageAccessToken: true },
-      });
-      if (!inst?.metaPageAccessToken || !inst.metaPageId) {
-        return htmlPage("⚠️", "Error", "Sin token Meta configurado. Configúralo desde el panel.", "#dc2626");
-      }
-      await sendMeta(inst.metaPageId, inst.metaPageAccessToken, log.uidUsuario, log.mensajeEnviado);
-    }
-  } catch (e) {
-    console.error("[approve-link] Error al enviar:", e);
-    return htmlPage("⚠️", "Error al enviar", "Ocurrió un error al enviar el mensaje. Intenta de nuevo o apruébalo desde el CRM.", "#dc2626");
-  }
-
-  const [business, stage] = await Promise.all([
-    prisma.business.findUnique({ where: { id: log.businessId }, select: { nombre: true, tablaMemoria: true } }),
-    prisma.funnelStage.findUnique({ where: { id: log.stageId }, select: { nombre: true } }),
-  ]);
-
-  if (business?.tablaMemoria) {
-    try {
-      await insertBotMemory(business.tablaMemoria, log.uidUsuario, log.canal, log.mensajeEnviado);
-    } catch {
-      // skip silencioso
-    }
-  }
-
-  await prisma.message.create({
-    data: {
-      instanciaId: log.instanciaId,
-      businessId: log.businessId,
-      nombreNegocio: business?.nombre ?? "",
-      canal: log.canal,
-      uidUsuario: log.uidUsuario,
-      rol: "bot",
-      contenido: log.mensajeEnviado,
-      tipoMedia: "text",
-      metadata: {
-        fuente: "seguimiento-automatico",
-        etapa: stage?.nombre ?? "",
-        modoEnvio: "manual-aprobado-email",
-      },
-    },
-  });
-
-  await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: true } });
-
-  const contactName = log.contact?.nombre ?? log.uidUsuario;
-  return htmlPage(
-    "✅",
-    "Mensaje enviado",
-    `El mensaje fue enviado a <strong>${contactName}</strong> correctamente.`,
-    "#16a34a",
-  );
+  return NextResponse.redirect(`${APP_URL}/follow-up/approve?logId=${encodeURIComponent(logId)}`);
 }

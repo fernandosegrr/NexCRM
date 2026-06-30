@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { upsertContactStageOptimistic } from "@/lib/contact-stage";
 
 /**
  * Clasificador de embudo con IA.
@@ -17,6 +18,37 @@ import { prisma } from "@/lib/prisma";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const THROTTLE_MS = 5 * 60_000;
+
+// Tope de llamadas a OpenAI por negocio por día. THROTTLE_MS ya evita
+// reclasificar la misma conversación muy seguido, pero no limita el gasto
+// total si un negocio tiene tráfico alto o el bot entra en un loop de
+// mensajes. Contador en memoria de proceso (igual patrón que el guard
+// `running` de scheduler.ts) — soft cap, se reinicia con cada deploy.
+const DAILY_CLASSIFICATION_CAP = Number(process.env.FUNNEL_AI_DAILY_CAP ?? 300);
+const dailyClassificationCounts = new Map<string, { day: string; count: number }>();
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function exceedsDailyCap(businessId: string): boolean {
+  const day = todayKey();
+  const entry = dailyClassificationCounts.get(businessId);
+  if (!entry || entry.day !== day) {
+    dailyClassificationCounts.set(businessId, { day, count: 1 });
+    return false;
+  }
+  entry.count += 1;
+  if (entry.count > DAILY_CLASSIFICATION_CAP) {
+    if (entry.count === DAILY_CLASSIFICATION_CAP + 1) {
+      console.warn(
+        `[funnel-classifier] Negocio ${businessId} alcanzó el tope diario de clasificaciones IA (${DAILY_CLASSIFICATION_CAP}).`,
+      );
+    }
+    return true;
+  }
+  return false;
+}
 
 export type ClassifyResult = {
   stageId: string;
@@ -117,6 +149,8 @@ export async function classifyContact(
       if (Date.now() - contact.clasificadoAt.getTime() < THROTTLE_MS) return null;
     }
 
+    if (!opts?.force && exceedsDailyCap(businessId)) return null;
+
     // Mensajes recientes (orden cronológico)
     const recent = await prisma.message.findMany({
       where: { businessId, instanciaId, uidUsuario },
@@ -188,11 +222,7 @@ export async function classifyContact(
         select: { id: true },
       });
 
-      await prisma.contactStage.upsert({
-        where: { contactId_businessId: { contactId: upsertedContact.id, businessId } },
-        create: { contactId: upsertedContact.id, stageId: suggestion.stageId, businessId },
-        update: { stageId: suggestion.stageId, asignadoAt: now },
-      });
+      await upsertContactStageOptimistic(upsertedContact.id, businessId, suggestion.stageId, now);
 
       // Evento sutil en el historial del chat
       await prisma.message.create({

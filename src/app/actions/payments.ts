@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildPaymentReminderHtml } from "@/lib/email";
@@ -211,6 +212,9 @@ export async function registerPayment(
     revalidateBusiness(businessId);
     return { ok: true };
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { ok: false, error: "Ya existe un pago registrado para este periodo." };
+    }
     return { ok: false, error: `No se pudo registrar el pago: ${String(err)}` };
   }
 }

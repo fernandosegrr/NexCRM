@@ -15,6 +15,8 @@ import {
 function tipoBadge(tipo: string) {
   if (tipo === "auto-recuperada") return <Badge variant="success">Auto-recuperada</Badge>;
   if (tipo === "intervencion_manual") return <Badge variant="secondary">Intervención manual</Badge>;
+  if (tipo === "falso_conectado") return <Badge variant="destructive">Falso conectado</Badge>;
+  if (tipo === "meta_token_expirando") return <Badge variant="secondary">Token Meta por expirar</Badge>;
   return <Badge variant="destructive">Caída detectada</Badge>;
 }
 

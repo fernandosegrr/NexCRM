@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApproveForm } from "./approve-form";
+import { isFollowUpLogExpired } from "@/lib/follow-up-link";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function ApprovePage({
       mensajeEnviado: true,
       razonIA: true,
       aprobado: true,
+      creadoAt: true,
       contact: { select: { nombre: true } },
     },
   });
@@ -46,6 +48,10 @@ export default async function ApprovePage({
 
   if (log.aprobado !== null) {
     return <StatusPage icon="ℹ️" title="Ya procesada" body="Esta sugerencia ya fue aprobada o descartada anteriormente." />;
+  }
+
+  if (isFollowUpLogExpired(log.creadoAt)) {
+    return <StatusPage icon="⏰" title="Enlace expirado" body="Este enlace ya no es válido. Aprueba o descarta la sugerencia desde el panel del embudo." />;
   }
 
   const [business, stage] = await Promise.all([
