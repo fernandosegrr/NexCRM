@@ -166,70 +166,114 @@ async function processInstance(inst: {
     });
 
     if (!anyRecentBotOrHuman) {
-      console.log("[health] posible falso conectado (sin respuesta ≥ 90 min):", instanciaId);
-
-      const falsoOpenIncident = await prisma.incidentLog.findFirst({
-        where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
-        select: { id: true },
+      // Calcular los contactos realmente afectados (no solo "existe algún
+      // mensaje de usuario"): deben seguir sin respuesta bot/human y tener
+      // el bot en /on (si está pausado intencionalmente, no es una falla).
+      const recentUserMsgs = await prisma.message.findMany({
+        where: { instanciaId, rol: "user", enviadoAt: { gte: ninetyMinAgo } },
+        select: { uidUsuario: true, enviadoAt: true },
+        orderBy: { enviadoAt: "desc" },
       });
 
-      if (!falsoOpenIncident) {
-        const detectedAt = now;
+      const latestByUidA5 = new Map<string, Date>();
+      for (const m of recentUserMsgs) {
+        if (!latestByUidA5.has(m.uidUsuario)) latestByUidA5.set(m.uidUsuario, m.enviadoAt);
+      }
 
-        const clientUsers = await prisma.user.findMany({
+      const contactosAfectados: string[] = [];
+      for (const [uid, lastUserAt] of Array.from(latestByUidA5.entries())) {
+        const reply = await prisma.message.findFirst({
           where: {
-            businessId: inst.business.id,
-            activo: true,
-            OR: [
-              { businessRoleId: null },
-              { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
-            ],
+            instanciaId,
+            uidUsuario: uid,
+            rol: { in: ["bot", "human"] },
+            enviadoAt: { gt: lastUserAt },
           },
-          select: { email: true },
+          select: { id: true },
         });
-        for (const u of clientUsers) {
-          try {
-            await sendEmail({
-              to: u.email,
-              subject: `⚠️ Tu asistente virtual dejó de responder — ${businessNombre}`,
-              html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
-            });
-          } catch { /* silencioso */ }
+        if (reply) continue;
+        try {
+          if (await getBotStatus(instanciaId, uid)) contactosAfectados.push(uid);
+        } catch {
+          contactosAfectados.push(uid); // si ESTATUS no responde, asumir /on (conservador)
         }
+      }
 
-        const emailEnviado = await sendAlertEmail({
-          subject: `⚠️ Posible falso conectado — ${businessNombre} (${instanciaId})`,
-          html: buildAlertHtml({
-            businessNombre,
-            instanciaId,
-            stuckUids: [],
-            detectedAt,
-            appUrl: APP_URL,
-          }),
+      console.log(
+        "[health] RUTA A.5 contactosAfectados:",
+        contactosAfectados.length,
+        "para negocio:",
+        businessNombre,
+      );
+
+      if (contactosAfectados.length === 0) {
+        console.log("[health] RUTA A.5 sin contactos afectados, no se envía alerta:", instanciaId);
+      } else {
+        console.log("[health] posible falso conectado (sin respuesta ≥ 90 min):", instanciaId);
+
+        const falsoOpenIncident = await prisma.incidentLog.findFirst({
+          where: { instanciaId, resolvedAt: null, creadoAt: { gte: twoHoursAgo } },
+          select: { id: true },
         });
 
-        await prisma.incidentLog.create({
-          data: {
+        if (!falsoOpenIncident) {
+          const detectedAt = now;
+
+          const clientUsers = await prisma.user.findMany({
+            where: {
+              businessId: inst.business.id,
+              activo: true,
+              OR: [
+                { businessRoleId: null },
+                { businessRole: { permisos: { has: "email_alertas_desconexion" } } },
+              ],
+            },
+            select: { email: true },
+          });
+          for (const u of clientUsers) {
+            try {
+              await sendEmail({
+                to: u.email,
+                subject: `⚠️ Tu asistente virtual dejó de responder — ${businessNombre}`,
+                html: buildClientDisconnectHtml({ businessNombre, appUrl: APP_URL }),
+              });
+            } catch { /* silencioso */ }
+          }
+
+          const emailEnviado = await sendAlertEmail({
+            subject: `⚠️ Posible falso conectado — ${businessNombre} (${instanciaId})`,
+            html: buildAlertHtml({
+              businessNombre,
+              instanciaId,
+              stuckUids: contactosAfectados,
+              detectedAt,
+              appUrl: APP_URL,
+            }),
+          });
+
+          await prisma.incidentLog.create({
+            data: {
+              instanciaId,
+              nombreNegocio: businessNombre,
+              tipo: "falso_conectado",
+              contactosSinResp: contactosAfectados.length,
+              estadoEvolution: "open",
+              accion: "ninguna",
+              resultado: "pendiente",
+              emailEnviado,
+              resolvedAt: null,
+            },
+          });
+
+          return {
             instanciaId,
-            nombreNegocio: businessNombre,
+            negocio: businessNombre,
             tipo: "falso_conectado",
-            contactosSinResp: 0,
-            estadoEvolution: "open",
-            accion: "ninguna",
             resultado: "pendiente",
-            emailEnviado,
-            resolvedAt: null,
-          },
-        });
-
-        return {
-          instanciaId,
-          negocio: businessNombre,
-          tipo: "falso_conectado",
-          resultado: "pendiente",
-          contactosSinResp: 0,
-          estadoEvolution: "open",
-        };
+            contactosSinResp: contactosAfectados.length,
+            estadoEvolution: "open",
+          };
+        }
       }
     }
   }
