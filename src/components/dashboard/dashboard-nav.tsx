@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart2,
   Bug,
+  ClipboardList,
   LayoutGrid,
   LogOut,
   Megaphone,
@@ -25,6 +26,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { BugReportDialog } from "./bug-report-button";
+import { MyBugReportsDialog } from "./my-bug-reports-dialog";
 
 const ACTIVE = "text-[#6366F1]";
 
@@ -61,6 +63,7 @@ function isActive(pathname: string, item: Pick<NavItem, "href" | "exact">): bool
 export function DashboardDesktopNav({ permisos }: { permisos: NavPermisos }) {
   const pathname = usePathname();
   const [bugOpen, setBugOpen] = useState(false);
+  const [myReportsOpen, setMyReportsOpen] = useState(false);
   const items = buildItems(permisos).filter((i) => i.show);
 
   return (
@@ -82,6 +85,14 @@ export function DashboardDesktopNav({ permisos }: { permisos: NavPermisos }) {
         );
       })}
       <button
+        onClick={() => setMyReportsOpen(true)}
+        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        title="Mis reportes"
+        aria-label="Mis reportes"
+      >
+        <ClipboardList className="size-4" />
+      </button>
+      <button
         onClick={() => setBugOpen(true)}
         className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         title="Reportar un problema"
@@ -90,6 +101,7 @@ export function DashboardDesktopNav({ permisos }: { permisos: NavPermisos }) {
         <Bug className="size-4" />
       </button>
       <BugReportDialog open={bugOpen} onOpenChange={setBugOpen} />
+      <MyBugReportsDialog open={myReportsOpen} onOpenChange={setMyReportsOpen} />
     </div>
   );
 }
@@ -103,6 +115,7 @@ export function DashboardMobileNav({ permisos }: { permisos: NavPermisos }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [bugOpen, setBugOpen] = useState(false);
+  const [myReportsOpen, setMyReportsOpen] = useState(false);
 
   const primary = buildItems(permisos).filter(
     (i) =>
@@ -165,6 +178,15 @@ export function DashboardMobileNav({ permisos }: { permisos: NavPermisos }) {
               <button
                 onClick={() => {
                   setMoreOpen(false);
+                  setMyReportsOpen(true);
+                }}
+                className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                <ClipboardList className="size-5 shrink-0" /> Mis reportes
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
                   setBugOpen(true);
                 }}
                 className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
@@ -185,6 +207,7 @@ export function DashboardMobileNav({ permisos }: { permisos: NavPermisos }) {
       </nav>
 
       <BugReportDialog open={bugOpen} onOpenChange={setBugOpen} />
+      <MyBugReportsDialog open={myReportsOpen} onOpenChange={setMyReportsOpen} />
     </>
   );
 }

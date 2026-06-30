@@ -20,6 +20,12 @@ const getOverduePaymentsCount = unstable_cache(
   { revalidate: 300 },
 );
 
+const getOpenBugsCount = unstable_cache(
+  () => prisma.bugReport.count({ where: { estado: { in: ["abierto", "en_progreso"] } } }),
+  ["open-bugs-count"],
+  { revalidate: 60 },
+);
+
 export default async function AdminLayout({
   children,
 }: {
@@ -30,9 +36,10 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const [incidentCount, overduePaymentsCount] = await Promise.all([
+  const [incidentCount, overduePaymentsCount, openBugsCount] = await Promise.all([
     getIncidentCount(),
     getOverduePaymentsCount(),
+    getOpenBugsCount(),
   ]);
 
   return (
@@ -41,6 +48,7 @@ export default async function AdminLayout({
       email={session.user.email}
       incidentCount={incidentCount}
       overduePaymentsCount={overduePaymentsCount}
+      openBugsCount={openBugsCount}
     >
       {children}
     </AdminShell>

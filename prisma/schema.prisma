@@ -34,6 +34,7 @@ model Business {
   campos       CustomField[]
   campanas     Campaign[]
   paymentConfig PaymentConfig?
+  bugReports   BugReport[]
 
   @@map("businesses")
 }
@@ -70,6 +71,7 @@ model User {
   businessRoleId String?
   businessRole   BusinessRole? @relation(fields: [businessRoleId], references: [id], onDelete: SetNull)
   creadoAt       DateTime      @default(now())
+  bugReports     BugReport[]
 
   @@index([businessId])
   @@map("users")
@@ -403,4 +405,41 @@ model PaymentNotification {
   @@index([businessId])
   @@index([enviadoAt(sort: Desc)])
   @@map("payment_notifications")
+}
+
+// ───────────────────────────────────────────────────────────
+// Seguimiento de reportes de bugs
+// ───────────────────────────────────────────────────────────
+
+model BugReport {
+  id            String          @id @default(cuid())
+  businessId    String
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nombreReporta String // nombre de quien reportó (por si no hay user)
+  emailReporta  String?
+  descripcion   String          @db.Text
+  pagina        String? // URL o sección donde ocurrió
+  screenshot    String? // URL de Cloudinary si se adjunta
+  estado        String          @default("abierto") // abierto | en_progreso | resuelto | descartado
+  prioridad     String          @default("media") // baja | media | alta | critica
+  creadoEn      DateTime        @default(now())
+  actualizadoEn DateTime        @updatedAt
+  resueltoEn    DateTime?
+  notas         BugReportNote[]
+
+  @@index([businessId, estado])
+  @@index([estado, prioridad])
+  @@map("bug_reports")
+}
+
+model BugReportNote {
+  id          String    @id @default(cuid())
+  bugReportId String
+  bugReport   BugReport @relation(fields: [bugReportId], references: [id], onDelete: Cascade)
+  contenido   String    @db.Text
+  creadoEn    DateTime  @default(now())
+
+  @@map("bug_report_notes")
 }

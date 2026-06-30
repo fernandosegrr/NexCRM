@@ -18,12 +18,14 @@ export function AdminShell({
   email,
   incidentCount = 0,
   overduePaymentsCount = 0,
+  openBugsCount = 0,
   children,
 }: {
   nombre: string;
   email?: string | null;
   incidentCount?: number;
   overduePaymentsCount?: number;
+  openBugsCount?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +38,11 @@ export function AdminShell({
           <Logo imageClassName="h-12" />
         </div>
         <div className="mt-2 flex-1 overflow-y-auto pb-4">
-          <SidebarNav incidentCount={incidentCount} overduePaymentsCount={overduePaymentsCount} />
+          <SidebarNav
+            incidentCount={incidentCount}
+            overduePaymentsCount={overduePaymentsCount}
+            openBugsCount={openBugsCount}
+          />
         </div>
         <div className="border-t border-border p-4 text-xs text-muted-foreground">
           Panel de administración
@@ -55,6 +61,7 @@ export function AdminShell({
               onNavigate={() => setOpen(false)}
               incidentCount={incidentCount}
               overduePaymentsCount={overduePaymentsCount}
+              openBugsCount={openBugsCount}
             />
           </div>
         </SheetContent>

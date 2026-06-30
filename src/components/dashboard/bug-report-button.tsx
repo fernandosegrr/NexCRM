@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,16 @@ export function BugReportDialog({
 }) {
   const [tipo, setTipo] = useState("bug");
   const [descripcion, setDescripcion] = useState("");
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScreenshotFile(file);
+    e.target.value = "";
+  }
 
   async function handleSubmit() {
     if (descripcion.trim().length < 10) {
@@ -43,16 +53,28 @@ export function BugReportDialog({
     }
     setLoading(true);
     try {
+      let screenshot: string | undefined;
+      if (screenshotFile) {
+        const formData = new FormData();
+        formData.append("file", screenshotFile);
+        formData.append("folder", "bug-reports");
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          screenshot = data.url;
+        }
+      }
       const res = await fetch("/api/support/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, descripcion, url: window.location.href }),
+        body: JSON.stringify({ tipo, descripcion, url: window.location.href, screenshot }),
       });
       if (!res.ok) throw new Error();
-      toast.success("Reporte enviado. ¡Gracias!");
+      toast.success('Reporte enviado. Puedes ver su estado en "Mis reportes".');
       onOpenChange(false);
       setDescripcion("");
       setTipo("bug");
+      setScreenshotFile(null);
     } catch {
       toast.error("No se pudo enviar el reporte. Intenta de nuevo.");
     } finally {
@@ -90,9 +112,51 @@ export function BugReportDialog({
               className="resize-none"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label>Captura de pantalla (opcional)</Label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={loading}
+            />
+            {screenshotFile ? (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                <span className="truncate text-muted-foreground">{screenshotFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setScreenshotFile(null)}
+                  disabled={loading}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Quitar captura"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileRef.current?.click()}
+                disabled={loading}
+              >
+                <Paperclip className="mr-1.5 size-4" /> Adjuntar imagen
+              </Button>
+            )}
+          </div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onOpenChange(false);
+              setScreenshotFile(null);
+            }}
+            disabled={loading}
+          >
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={loading}>

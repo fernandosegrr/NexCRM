@@ -11,14 +11,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
-  let body: { tipo?: string; descripcion?: string; url?: string };
+  let body: { tipo?: string; descripcion?: string; url?: string; screenshot?: string };
   try {
     body = await req.json() as typeof body;
   } catch {
     return NextResponse.json({ error: "Body inválido." }, { status: 400 });
   }
 
-  const { tipo, descripcion, url = "" } = body;
+  const { tipo, descripcion, url = "", screenshot } = body;
 
   if (!tipo || !["bug", "sugerencia", "pregunta"].includes(tipo)) {
     return NextResponse.json({ error: "Tipo inválido." }, { status: 422 });
@@ -37,6 +37,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       select: { nombre: true },
     });
     if (b) negocio = b.nombre;
+  }
+
+  let bugReportId: string | null = null;
+  if (session.user.businessId) {
+    const created = await prisma.bugReport.create({
+      data: {
+        businessId: session.user.businessId,
+        userId: session.user.id,
+        nombreReporta: session.user.nombre ?? session.user.email ?? "Desconocido",
+        emailReporta: session.user.email ?? null,
+        descripcion: descripcion.trim(),
+        pagina: url.trim() || null,
+        screenshot: screenshot?.trim() || null,
+      },
+      select: { id: true },
+    });
+    bugReportId = created.id;
   }
 
   const fechaMex = new Date().toLocaleString("es-MX", {
@@ -66,5 +83,5 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error("[support/report] email error:", err);
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true, bugReportId }, { status: 201 });
 }

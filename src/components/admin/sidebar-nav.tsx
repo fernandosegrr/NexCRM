@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bug,
   ClipboardList,
   LayoutDashboard,
   MessageSquare,
@@ -21,6 +22,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/negocios", label: "Negocios", icon: Store },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/mensajes", label: "Mensajes", icon: MessageSquare },
+  { href: "/admin/bugs", label: "Bugs", icon: Bug },
   { href: "/admin/auditoria", label: "Auditoría", icon: ClipboardList },
   { href: "/admin/estado", label: "Estado", icon: Wifi },
 ];
@@ -29,10 +31,12 @@ export function SidebarNav({
   onNavigate,
   incidentCount = 0,
   overduePaymentsCount = 0,
+  openBugsCount = 0,
 }: {
   onNavigate?: () => void;
   incidentCount?: number;
   overduePaymentsCount?: number;
+  openBugsCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -66,6 +70,11 @@ export function SidebarNav({
             {item.href === "/admin" && overduePaymentsCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1.5 text-[10px] font-bold text-black">
                 {overduePaymentsCount > 99 ? "99+" : overduePaymentsCount}
+              </span>
+            )}
+            {item.href === "/admin/bugs" && openBugsCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {openBugsCount > 99 ? "99+" : openBugsCount}
               </span>
             )}
           </Link>
