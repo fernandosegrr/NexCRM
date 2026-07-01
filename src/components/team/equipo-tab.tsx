@@ -424,19 +424,46 @@ export function EquipoTab({
             {roles.map((role) => {
               const preview = role.permisos.slice(0, 3);
               const extra = role.permisos.length - 3;
+              const menu = canManageRoles && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="size-8 shrink-0">
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <RoleDrawer businessId={businessId} role={role} onDone={refresh} />
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={role._count.usuarios > 0 || pending}
+                      onSelect={() => handleDeleteRole(role.id)}
+                    >
+                      <Trash2 className="size-4 mr-2" />
+                      Eliminar
+                      {role._count.usuarios > 0 && (
+                        <span className="ml-2 text-muted-foreground text-xs">(con usuarios)</span>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
               return (
                 <div
                   key={role.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                  className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center"
                 >
-                  <Shield className="size-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{role.nombre}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {role._count.usuarios} usuario{role._count.usuarios !== 1 ? "s" : ""}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Shield className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{role.nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {role._count.usuarios} usuario{role._count.usuarios !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="sm:hidden">{menu}</div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-1 flex-wrap items-center gap-1 sm:justify-end">
                     {preview.map((p) => (
                       <Badge key={p} variant="secondary" className="text-[10px]">
                         {PERMISO_LABELS[p as Permiso] ?? p}
@@ -448,30 +475,7 @@ export function EquipoTab({
                       </Badge>
                     )}
                   </div>
-                  {canManageRoles && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="size-8 shrink-0">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <RoleDrawer businessId={businessId} role={role} onDone={refresh} />
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          disabled={role._count.usuarios > 0 || pending}
-                          onSelect={() => handleDeleteRole(role.id)}
-                        >
-                          <Trash2 className="size-4 mr-2" />
-                          Eliminar
-                          {role._count.usuarios > 0 && (
-                            <span className="ml-2 text-muted-foreground text-xs">(con usuarios)</span>
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  <div className="hidden sm:block">{menu}</div>
                 </div>
               );
             })}
@@ -500,22 +504,54 @@ export function EquipoTab({
             {members.map((m) => {
               const initial = m.nombre.charAt(0).toUpperCase();
               const isSelf = m.id === currentUserId;
+              const menu = canManageUsers && !isSelf && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="size-8 shrink-0">
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <MemberDrawer
+                      businessId={businessId}
+                      member={m}
+                      roles={roles}
+                      onDone={refresh}
+                    />
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={pending}
+                      onSelect={() => handleToggleMember(m.id, !m.activo)}
+                      className={!m.activo ? "" : "text-destructive focus:text-destructive"}
+                    >
+                      {m.activo ? (
+                        <><X className="size-4 mr-2" />Desactivar acceso</>
+                      ) : (
+                        <><Check className="size-4 mr-2" />Activar acceso</>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
               return (
                 <div
                   key={m.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                  className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                    {initial}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                      {initial}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {m.nombre}
+                        {isSelf && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(tú)</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                    </div>
+                    <div className="sm:hidden">{menu}</div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {m.nombre}
-                      {isSelf && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(tú)</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">{m.email}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
                     {m.businessRole && (
                       <Badge variant="secondary" className="text-xs">
                         {m.businessRole.nombre}
@@ -528,35 +564,7 @@ export function EquipoTab({
                       {m.activo ? "Activo" : "Inactivo"}
                     </Badge>
                   </div>
-                  {canManageUsers && !isSelf && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="size-8 shrink-0">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <MemberDrawer
-                          businessId={businessId}
-                          member={m}
-                          roles={roles}
-                          onDone={refresh}
-                        />
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={pending}
-                          onSelect={() => handleToggleMember(m.id, !m.activo)}
-                          className={!m.activo ? "" : "text-destructive focus:text-destructive"}
-                        >
-                          {m.activo ? (
-                            <><X className="size-4 mr-2" />Desactivar acceso</>
-                          ) : (
-                            <><Check className="size-4 mr-2" />Activar acceso</>
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  <div className="hidden sm:block">{menu}</div>
                 </div>
               );
             })}

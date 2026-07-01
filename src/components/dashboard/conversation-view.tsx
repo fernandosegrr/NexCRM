@@ -303,6 +303,7 @@ export function ConversationView({
     setMessages((prev) => (prev ? [...prev, newMsg] : [newMsg]));
   }
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -363,12 +364,22 @@ export function ConversationView({
     };
   }, [contact.instanciaId, contact.uidUsuario, reload]);
 
+  // Al cargar los mensajes, el contenedor puede seguir creciendo mientras
+  // imágenes/videos terminan de cargar (no tienen alto reservado), lo que deja
+  // el scroll a media conversación. Reescucha 'load'/'loadedmetadata' de esos
+  // medios (fase de captura, ya que 'load' no burbujea) para reajustar.
   useEffect(() => {
-    if (messages && !error) {
-      requestAnimationFrame(() =>
-        bottomRef.current?.scrollIntoView({ behavior: "auto" }),
-      );
-    }
+    if (!messages || error) return;
+    const scrollToBottom = () => bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    requestAnimationFrame(scrollToBottom);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.addEventListener("load", scrollToBottom, true);
+    container.addEventListener("loadedmetadata", scrollToBottom, true);
+    return () => {
+      container.removeEventListener("load", scrollToBottom, true);
+      container.removeEventListener("loadedmetadata", scrollToBottom, true);
+    };
   }, [messages, error]);
 
   return (
@@ -536,6 +547,7 @@ export function ConversationView({
 
       {/* Mensajes */}
       <div
+        ref={messagesContainerRef}
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-4 sm:px-6"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
@@ -914,11 +926,11 @@ function ContactPanel({
             <p className="text-xs text-muted-foreground">{info.canal}</p>
           </div>
         </div>
-        <TabsList className="w-full h-8 rounded-none bg-transparent p-0 border-0">
-          <TabsTrigger value="info" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8">Info</TabsTrigger>
-          <TabsTrigger value="notas" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8">Notas</TabsTrigger>
-          <TabsTrigger value="etiquetas" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8">Etiquetas</TabsTrigger>
-          <TabsTrigger value="timeline" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8">Timeline</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4 h-8 rounded-none bg-transparent p-0 border-0">
+          <TabsTrigger value="info" className="min-w-0 shrink rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8 truncate">Info</TabsTrigger>
+          <TabsTrigger value="notas" className="min-w-0 shrink rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8 truncate">Notas</TabsTrigger>
+          <TabsTrigger value="etiquetas" className="min-w-0 shrink rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8 truncate">Etiquetas</TabsTrigger>
+          <TabsTrigger value="timeline" className="min-w-0 shrink rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-primary data-[state=active]:shadow-none text-xs h-8 truncate">Timeline</TabsTrigger>
         </TabsList>
       </div>
 
