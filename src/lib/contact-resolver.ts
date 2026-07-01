@@ -69,7 +69,11 @@ export async function resolveContact(
       const apiUrl = process.env.EVOLUTION_API_URL;
       const apiKey = process.env.EVOLUTION_API_KEY;
       if (apiUrl && apiKey) {
-        const waNumber = `${uidUsuario}@s.whatsapp.net`;
+        // WhatsApp no siempre usa "@s.whatsapp.net" (algunos contactos usan
+        // "@lid" — ver Contact.jidCompleto / memoria "estatus-jid-format").
+        // Preferir el JID real capturado en la ingesta; reconstruirlo a mano
+        // solo si todavía no lo tenemos (contacto nunca visto con este campo).
+        const waNumber = jidCompleto || existing?.jidCompleto || `${uidUsuario}@s.whatsapp.net`;
         try {
           // Step 1: get pushName
           const numbersRes = await fetch(
