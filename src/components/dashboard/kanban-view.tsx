@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import type { ConversationContact, FunnelStageDTO } from "@/lib/data";
 import { upsertContactStage } from "@/app/actions/businesses";
-import { avatarColor, initialOf, relativeTime, truncate } from "@/lib/format";
+import { avatarColor, displayUid, initialOf, relativeTime, truncate } from "@/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChannelBadge } from "@/components/channel-badge";
 import { cn } from "@/lib/utils";
@@ -36,16 +36,16 @@ function CardBody({ contact }: { contact: ConversationContact }) {
           {contact.fotoPerfil && (
             <AvatarImage
               src={contact.fotoPerfil}
-              alt={contact.nombre ?? contact.uidUsuario}
+              alt={contact.nombre ?? displayUid(contact.uidUsuario, contact.canal)}
             />
           )}
           <AvatarFallback className={cn("text-xs", avatarColor(contact.uidUsuario))}>
-            {initialOf(contact.nombre ?? contact.username ?? contact.uidUsuario)}
+            {initialOf(contact.nombre ?? contact.username ?? displayUid(contact.uidUsuario, contact.canal))}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium">
-            {contact.nombre ?? contact.username ?? contact.uidUsuario}
+            {contact.nombre ?? contact.username ?? displayUid(contact.uidUsuario, contact.canal)}
           </p>
           <div className="flex items-center gap-1.5">
             <ChannelBadge canal={contact.canal} size="xs" />

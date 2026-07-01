@@ -82,3 +82,15 @@ export function truncate(text: string | null | undefined, max = 60): string {
   if (!text) return "";
   return text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
 }
+
+/**
+ * Uid para mostrar cuando no hay nombre/username resuelto. En WhatsApp
+ * muestra solo los últimos 10 dígitos (oculta código de país); otros canales
+ * se muestran tal cual. Solo para UI — el id técnico completo sigue
+ * intacto en Contact.uidUsuario y en la ficha de contacto.
+ */
+export function displayUid(uidUsuario: string, canal: string): string {
+  if (canal !== "whatsapp") return uidUsuario;
+  const digits = uidUsuario.replace(/\D/g, "");
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}

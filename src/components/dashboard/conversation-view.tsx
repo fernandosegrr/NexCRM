@@ -29,7 +29,7 @@ import {
   deleteContactTag,
   upsertContactFieldValue,
 } from "@/app/actions/contacts";
-import { avatarColor, dayLabel, initialOf, timeOnly } from "@/lib/format";
+import { avatarColor, dayLabel, displayUid, initialOf, timeOnly } from "@/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -385,15 +385,15 @@ export function ConversationView({
         </button>
         <Avatar className="h-9 w-9">
           {contact.fotoPerfil && (
-            <AvatarImage src={contact.fotoPerfil} alt={contact.nombre ?? contact.uidUsuario} />
+            <AvatarImage src={contact.fotoPerfil} alt={contact.nombre ?? displayUid(contact.uidUsuario, contact.canal)} />
           )}
           <AvatarFallback className={avatarColor(contact.uidUsuario)}>
-            {initialOf(contact.nombre ?? contact.username ?? contact.uidUsuario)}
+            {initialOf(contact.nombre ?? contact.username ?? displayUid(contact.uidUsuario, contact.canal))}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium leading-tight">
-            {contact.nombre ?? contact.username ?? contact.uidUsuario}
+            {contact.nombre ?? contact.username ?? displayUid(contact.uidUsuario, contact.canal)}
           </p>
           <div className="mt-1">
             <ChannelBadge canal={contact.canal} size="xs" />
@@ -904,12 +904,12 @@ function ContactPanel({
           <Avatar className="size-8">
             {info.fotoPerfil && <AvatarImage src={info.fotoPerfil} />}
             <AvatarFallback className={avatarColor(info.uidUsuario)}>
-              {initialOf(info.nombre ?? info.username ?? info.uidUsuario)}
+              {initialOf(info.nombre ?? info.username ?? displayUid(info.uidUsuario, info.canal))}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {info.nombre ?? info.username ?? info.uidUsuario}
+              {info.nombre ?? info.username ?? displayUid(info.uidUsuario, info.canal)}
             </p>
             <p className="text-xs text-muted-foreground">{info.canal}</p>
           </div>

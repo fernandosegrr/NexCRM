@@ -297,6 +297,10 @@ export async function POST(req: NextRequest) {
         d.instanciaId,
         inst.canal,
         inst.metaPageAccessToken,
+        // JID completo (con @s.whatsapp.net o @lid) tal cual lo mandó WhatsApp —
+        // se guarda para que el toggle del bot escriba ESTATUS con el mismo
+        // formato exacto que n8n espera (ver src/lib/n8n.ts).
+        inst.canal === "whatsapp" && d.uidUsuario.includes("@") ? d.uidUsuario : null,
       );
 
       // Primer mensaje → asignar primera etapa sin GPT.

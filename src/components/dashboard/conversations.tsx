@@ -25,7 +25,7 @@ const CANALES = [
 ] as const;
 
 import type { ConversationContact } from "@/lib/data";
-import { avatarColor, initialOf, relativeTime, truncate } from "@/lib/format";
+import { avatarColor, displayUid, initialOf, relativeTime, truncate } from "@/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -551,13 +551,13 @@ export function Conversations() {
                   <div key={s.id} className="rounded-lg border border-border bg-card p-2.5 text-xs space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-7 w-7 shrink-0">
-                        {s.contact.fotoPerfil && <AvatarImage src={s.contact.fotoPerfil} alt={s.contact.nombre ?? s.uidUsuario} />}
+                        {s.contact.fotoPerfil && <AvatarImage src={s.contact.fotoPerfil} alt={s.contact.nombre ?? displayUid(s.uidUsuario, s.canal)} />}
                         <AvatarFallback className={avatarColor(s.uidUsuario)}>
-                          {initialOf(s.contact.nombre ?? s.contact.username ?? s.uidUsuario)}
+                          {initialOf(s.contact.nombre ?? s.contact.username ?? displayUid(s.uidUsuario, s.canal))}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <span className="truncate font-medium">{s.contact.nombre ?? s.contact.username ?? s.uidUsuario}</span>
+                        <span className="truncate font-medium">{s.contact.nombre ?? s.contact.username ?? displayUid(s.uidUsuario, s.canal)}</span>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <ChannelBadge canal={s.canal} size="xs" />
                           {s.stageName && s.stageColor && (
@@ -631,16 +631,16 @@ export function Conversations() {
                       >
                         <Avatar className="h-11 w-11 shrink-0">
                           {c.fotoPerfil && (
-                            <AvatarImage src={c.fotoPerfil} alt={c.nombre ?? c.uidUsuario} />
+                            <AvatarImage src={c.fotoPerfil} alt={c.nombre ?? displayUid(c.uidUsuario, c.canal)} />
                           )}
                           <AvatarFallback className={avatarColor(c.uidUsuario)}>
-                            {initialOf(c.nombre ?? c.username ?? "")}
+                            {initialOf(c.nombre ?? c.username ?? displayUid(c.uidUsuario, c.canal))}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-sm font-medium">
-                              {c.nombre ?? c.username ?? c.uidUsuario}
+                              {c.nombre ?? c.username ?? displayUid(c.uidUsuario, c.canal)}
                             </span>
                             <span className="shrink-0 text-[11px] text-muted-foreground">
                               {relativeTime(c.lastAt)}

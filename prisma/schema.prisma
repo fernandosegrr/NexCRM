@@ -125,6 +125,11 @@ model Contact {
   nombre      String?
   username    String?
   fotoPerfil  String?
+  // JID/id completo tal cual lo entrega WhatsApp (con sufijo @s.whatsapp.net
+  // o @lid — WhatsApp decide cuál según privacidad del contacto). null en
+  // IG/Messenger. Es la fuente de verdad para escribir ESTATUS en n8n.ts;
+  // uidUsuario (sin sufijo) sigue siendo la clave de identidad interna.
+  jidCompleto String?
   resolvedAt  DateTime            @default(now())
   etapas      ContactStage[]
   notas       ContactNote[]

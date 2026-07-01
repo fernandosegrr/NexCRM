@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getBotStatus, setBotStatus } from "@/lib/n8n";
 import { instanceBelongsToBusiness } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 import { botStatusSchema } from "@/lib/validations";
 import type { Session } from "next-auth";
 
@@ -69,8 +70,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
+  const [inst, contact] = await Promise.all([
+    prisma.businessInstance.findFirst({
+      where: { instanciaId },
+      select: { canal: true },
+    }),
+    prisma.contact.findUnique({
+      where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+      select: { jidCompleto: true },
+    }),
+  ]);
+  if (!inst) {
+    return NextResponse.json({ error: "Instancia no registrada" }, { status: 404 });
+  }
+
   try {
-    await setBotStatus(instanciaId, uidUsuario, activo);
+    await setBotStatus(instanciaId, uidUsuario, activo, inst.canal, contact?.jidCompleto);
     return NextResponse.json({ ok: true, activo });
   } catch {
     return NextResponse.json(

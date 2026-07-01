@@ -11,6 +11,7 @@ export async function resolveContact(
   instanciaId: string,
   canal: string,
   token?: string | null,
+  jidCompleto?: string | null,
 ): Promise<void> {
   try {
     const existing = await prisma.contact.findUnique({
@@ -113,12 +114,13 @@ export async function resolveContact(
 
     await prisma.contact.upsert({
       where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
-      create: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil },
+      create: { uidUsuario, instanciaId, canal, nombre, username, fotoPerfil, jidCompleto: jidCompleto ?? null },
       update: {
         // Never overwrite an existing name/photo with null if the API call failed.
-        ...(nombre     !== null ? { nombre }     : {}),
-        ...(username   !== null ? { username }   : {}),
-        ...(fotoPerfil !== null ? { fotoPerfil } : {}),
+        ...(nombre      !== null ? { nombre }      : {}),
+        ...(username    !== null ? { username }    : {}),
+        ...(fotoPerfil  !== null ? { fotoPerfil }  : {}),
+        ...(jidCompleto ? { jidCompleto } : {}),
         resolvedAt: new Date(),
       },
     });

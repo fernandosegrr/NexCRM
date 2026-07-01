@@ -121,8 +121,14 @@ Ejemplo real de fila:
 ```
 id_registro=1  "ID"="5214623455661@s.whatsapp.net"  "Instancia"="vepiautomkt"  "Estatus"="/on"
 ```
-El CRM guarda `uidUsuario="5214623455661"` (sin sufijo); por eso el match compara la
-parte previa a `@`.
+El CRM guarda `uidUsuario="5214623455661"` (sin sufijo) — el `MATCH` de arriba lo
+tolera **al leer**, pero el flujo de n8n (fuera de este repo) compara `"ID"` tal
+cual contra el JID que recibe del webhook, con sufijo incluido. Por eso
+`setBotStatus` reconstruye `"ID"` como `{uidUsuario}@s.whatsapp.net` (solo para
+`canal = "whatsapp"`, vía `canonicalId()`) en **cada** INSERT/UPDATE, nunca con
+el número plano — si no, n8n nunca encuentra la fila y el bot sigue respondiendo
+aunque el CRM marque el contacto como pausado. Esto también autorepara filas
+viejas que se hubieran insertado con el formato incorrecto antes de este fix.
 
 ---
 
