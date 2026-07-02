@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { fullDateTime } from "@/lib/format";
-import { ESTADO_LABELS, PRIORIDAD_LABELS } from "@/lib/bug-report";
+import { ESTADO_LABELS, PRIORIDAD_LABELS, TIPO_LABELS } from "@/lib/bug-report";
 import type { BugReportListItem } from "./bugs-manager";
 
 type Nota = { id: string; contenido: string; creadoEn: string };
@@ -119,6 +119,9 @@ export function BugDetailSheet({
         ) : (
           <div className="flex-1 space-y-5 p-6">
             <div>
+              <Badge variant="outline" className="mb-2">
+                {TIPO_LABELS[detail.tipo] ?? detail.tipo}
+              </Badge>
               <p className="text-xs text-muted-foreground">
                 {detail.businessNombre} &middot; {detail.nombreReporta}
                 {detail.emailReporta ? ` (${detail.emailReporta})` : ""}

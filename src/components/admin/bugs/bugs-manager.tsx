@@ -27,6 +27,7 @@ import {
   ESTADO_LABELS,
   PRIORIDAD_BADGE_CLASS,
   PRIORIDAD_LABELS,
+  TIPO_LABELS,
 } from "@/lib/bug-report";
 import { BugDetailSheet } from "./bug-detail-sheet";
 
@@ -36,6 +37,7 @@ export type BugReportListItem = {
   businessNombre: string;
   nombreReporta: string;
   emailReporta: string | null;
+  tipo: string;
   descripcion: string;
   pagina: string | null;
   screenshot: string | null;
@@ -48,6 +50,7 @@ export type BugReportListItem = {
 
 const ESTADO_FILTROS = ["todos", "abierto", "en_progreso", "resuelto", "descartado"];
 const PRIORIDAD_FILTROS = ["todas", "baja", "media", "alta", "critica"];
+const TIPO_FILTROS = ["todos", "bug", "sugerencia", "pregunta"];
 
 export function BugsManager({
   reports,
@@ -58,6 +61,7 @@ export function BugsManager({
 }) {
   const [estadoFiltro, setEstadoFiltro] = useState("todos");
   const [prioridadFiltro, setPrioridadFiltro] = useState("todas");
+  const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [businessFiltro, setBusinessFiltro] = useState("todos");
   const [selected, setSelected] = useState<BugReportListItem | null>(null);
 
@@ -65,10 +69,11 @@ export function BugsManager({
     return reports.filter((r) => {
       if (estadoFiltro !== "todos" && r.estado !== estadoFiltro) return false;
       if (prioridadFiltro !== "todas" && r.prioridad !== prioridadFiltro) return false;
+      if (tipoFiltro !== "todos" && r.tipo !== tipoFiltro) return false;
       if (businessFiltro !== "todos" && r.businessId !== businessFiltro) return false;
       return true;
     });
-  }, [reports, estadoFiltro, prioridadFiltro, businessFiltro]);
+  }, [reports, estadoFiltro, prioridadFiltro, tipoFiltro, businessFiltro]);
 
   return (
     <div className="space-y-6">
@@ -104,6 +109,19 @@ export function BugsManager({
           </SelectContent>
         </Select>
 
+        <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIPO_FILTROS.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t === "todos" ? "Todos los tipos" : TIPO_LABELS[t]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={businessFiltro} onValueChange={setBusinessFiltro}>
           <SelectTrigger className="w-[200px]">
             <SelectValue />
@@ -133,6 +151,7 @@ export function BugsManager({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Negocio</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Descripción</TableHead>
                   <TableHead>Página</TableHead>
                   <TableHead>Estado</TableHead>
@@ -148,6 +167,9 @@ export function BugsManager({
                     onClick={() => setSelected(r)}
                   >
                     <TableCell className="font-medium">{r.businessNombre}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {TIPO_LABELS[r.tipo] ?? r.tipo}
+                    </TableCell>
                     <TableCell className="max-w-[320px] truncate text-muted-foreground">
                       {truncate(r.descripcion, 80)}
                     </TableCell>
@@ -188,7 +210,7 @@ export function BugsManager({
                   </Badge>
                 </div>
                 <p className="mt-1.5 truncate text-sm text-muted-foreground">
-                  {truncate(r.descripcion, 100)}
+                  {TIPO_LABELS[r.tipo] ?? r.tipo} · {truncate(r.descripcion, 100)}
                 </p>
                 <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
                   <Badge className={PRIORIDAD_BADGE_CLASS[r.prioridad] ?? ""}>

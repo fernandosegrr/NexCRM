@@ -22,6 +22,7 @@ export async function GET(): Promise<NextResponse> {
     orderBy: { creadoEn: "desc" },
     select: {
       id: true,
+      tipo: true,
       descripcion: true,
       pagina: true,
       estado: true,

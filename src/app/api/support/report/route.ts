@@ -47,6 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         userId: session.user.id,
         nombreReporta: session.user.nombre ?? session.user.email ?? "Desconocido",
         emailReporta: session.user.email ?? null,
+        tipo,
         descripcion: descripcion.trim(),
         pagina: url.trim() || null,
         screenshot: screenshot?.trim() || null,

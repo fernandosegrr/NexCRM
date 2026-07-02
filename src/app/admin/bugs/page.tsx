@@ -28,6 +28,7 @@ export default async function AdminBugsPage() {
     businessNombre: r.business.nombre,
     nombreReporta: r.nombreReporta,
     emailReporta: r.emailReporta,
+    tipo: r.tipo,
     descripcion: r.descripcion,
     pagina: r.pagina,
     screenshot: r.screenshot,

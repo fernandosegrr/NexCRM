@@ -1,3 +1,9 @@
+export const TIPO_LABELS: Record<string, string> = {
+  bug: "🐛 Bug",
+  sugerencia: "💡 Sugerencia",
+  pregunta: "❓ Pregunta",
+};
+
 export const ESTADO_LABELS: Record<string, string> = {
   abierto: "Abierto",
   en_progreso: "En progreso",

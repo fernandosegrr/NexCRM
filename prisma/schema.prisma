@@ -446,6 +446,7 @@ model BugReport {
   user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   nombreReporta String // nombre de quien reportó (por si no hay user)
   emailReporta  String?
+  tipo          String          @default("bug") // bug | sugerencia | pregunta
   descripcion   String          @db.Text
   pagina        String? // URL o sección donde ocurrió
   screenshot    String? // URL de Cloudinary si se adjunta

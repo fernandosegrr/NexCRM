@@ -45,6 +45,7 @@ export async function GET(
     businessNombre: report.business.nombre,
     nombreReporta: report.nombreReporta,
     emailReporta: report.emailReporta,
+    tipo: report.tipo,
     descripcion: report.descripcion,
     pagina: report.pagina,
     screenshot: report.screenshot,

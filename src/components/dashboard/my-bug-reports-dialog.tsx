@@ -10,10 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ESTADO_BADGE_CLASS, ESTADO_LABELS } from "@/lib/bug-report";
+import { ESTADO_BADGE_CLASS, ESTADO_LABELS, TIPO_LABELS } from "@/lib/bug-report";
 
 type MyReport = {
   id: string;
+  tipo: string;
   descripcion: string;
   pagina: string | null;
   estado: string;
@@ -70,6 +71,7 @@ export function MyBugReportsDialog({
                     </Badge>
                   </div>
                   <p className="mt-1.5 text-xs text-muted-foreground">
+                    {TIPO_LABELS[r.tipo] ?? r.tipo} ·{" "}
                     {new Date(r.creadoEn).toLocaleString("es-MX", {
                       dateStyle: "medium",
                       timeStyle: "short",
