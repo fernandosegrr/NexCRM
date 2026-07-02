@@ -19,7 +19,7 @@ const CANAL_LABEL: Record<string, string> = {
   messenger: "Messenger",
 };
 
-export function ApproveForm({ log }: { log: LogData }) {
+export function ApproveForm({ log, token }: { log: LogData; token?: string | null }) {
   const [mensaje, setMensaje] = useState(log.mensajeEnviado ?? "");
   const [status, setStatus] = useState<"idle" | "sending" | "done_approve" | "done_discard" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,6 +34,7 @@ export function ApproveForm({ log }: { log: LogData }) {
           logId: log.id,
           action,
           mensaje: action === "approve" ? mensaje : undefined,
+          t: token ?? undefined,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };

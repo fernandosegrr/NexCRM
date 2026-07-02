@@ -159,14 +159,16 @@ async function processBusinessSummary(business: {
     if (count > 0) tiempoPromedioRespuesta = Math.round(totalMs / count / 1000);
   }
 
-  // Seguimientos enviados
+  // Seguimientos enviados — solo los que realmente se ENVIARON. Contar todos
+  // los logs (ia_descarto, ventana_cerrada, errores...) inflaba la métrica
+  // que el dueño recibe cada lunes.
   const seguimientosEnviados = await prisma.followUpLog.count({
-    where: { businessId: business.id, creadoAt: { gte: weekStart } },
+    where: { businessId: business.id, decision: "enviado", creadoAt: { gte: weekStart } },
   });
 
   // Tasa de respuesta (contactos que respondieron después de seguimiento)
   const seguimientoLogs = await prisma.followUpLog.findMany({
-    where: { businessId: business.id, creadoAt: { gte: weekStart } },
+    where: { businessId: business.id, decision: "enviado", creadoAt: { gte: weekStart } },
     select: { uidUsuario: true, instanciaId: true, creadoAt: true },
     take: 50,
   });

@@ -15,10 +15,15 @@ export async function insertBotMemory(
   canal: string,
   type: "ai" | "human",
   text: string,
+  jidCompleto?: string | null,
 ): Promise<void> {
   if (!/^[a-zA-Z0-9_]+$/.test(tablaMemoria)) return;
+  // El session_id del bot es el JID real (puede ser @lid); adivinar el sufijo
+  // escribe la memoria en una sesión que el bot nunca lee.
   const sessionId =
-    canal === "whatsapp" ? `${uidUsuario}@s.whatsapp.net` : uidUsuario;
+    canal === "whatsapp"
+      ? (jidCompleto ?? `${uidUsuario}@s.whatsapp.net`)
+      : uidUsuario;
   await n8nPool.query(
     `INSERT INTO "${tablaMemoria}" (session_id, message) VALUES ($1, $2)`,
     [sessionId, JSON.stringify({ type, content: text })],

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, buildSuggestionHtml } from "@/lib/email";
 import { upsertContactStageOptimistic } from "@/lib/contact-stage";
 import { insertBotMemory } from "@/lib/bot-memory";
+import { getBotStatus } from "@/lib/n8n";
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
@@ -10,6 +11,8 @@ const APP_URL =
   process.env.APP_URL ??
   process.env.NEXTAUTH_URL ??
   "https://postgres-nexcrm.d6cr6o.easypanel.host";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ProcessResult = {
   contactId: string;
@@ -26,9 +29,11 @@ type AIResponse = {
   cambioEtapa: boolean;
 };
 
+// `destino` es el JID real del contacto (Contact.jidCompleto puede ser @lid);
+// armar el sufijo a mano manda el mensaje a un destino equivocado.
 async function sendWhatsApp(
   instanciaId: string,
-  uidUsuario: string,
+  destino: string,
   text: string,
 ): Promise<void> {
   const ctrl = new AbortController();
@@ -39,7 +44,7 @@ async function sendWhatsApp(
       {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-        body: JSON.stringify({ number: `${uidUsuario}@s.whatsapp.net`, text }),
+        body: JSON.stringify({ number: destino, text }),
         signal: ctrl.signal,
       },
     );
@@ -85,7 +90,7 @@ async function sendMeta(
 }
 
 async function processContact(params: {
-  contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null };
+  contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null; jidCompleto?: string | null };
   stage: { id: string; nombre: string; mensajeSeguimiento: string | null };
   business: { id: string; nombre: string; tablaMemoria: string | null; etapas: { id: string; nombre: string; descripcion: string | null }[] };
   config: { modoEnvio: string; tiempoInactividad: number; maxEnviosPorDia: number; maxEnviosTotal: number | null };
@@ -130,7 +135,15 @@ async function processContact(params: {
     ]);
 
     if (dailyCount >= config.maxEnviosPorDia) {
-      await prisma.followUpLog.create({ data: { ...logBase, decision: "limite_alcanzado", razonIA: "Límite diario alcanzado" } });
+      // Un solo log diagnóstico por día — el cron corre cada 15 min y sin este
+      // guard acumulaba 90+ filas idénticas al día por contacto.
+      const yaLogueado = await prisma.followUpLog.findFirst({
+        where: { contactId: contact.id, stageId: stage.id, decision: "limite_alcanzado", creadoAt: { gte: todayStart } },
+        select: { id: true },
+      });
+      if (!yaLogueado) {
+        await prisma.followUpLog.create({ data: { ...logBase, decision: "limite_alcanzado", razonIA: "Límite diario alcanzado" } });
+      }
       return { contactId: contact.id, decision: "limite_alcanzado" };
     }
     if (config.maxEnviosTotal !== null && totalCount >= config.maxEnviosTotal) {
@@ -141,27 +154,56 @@ async function processContact(params: {
     if (contact.canal === "instagram" || contact.canal === "messenger") {
       const hoursSinceLast = minutesSinceLast / 60;
       if (hoursSinceLast > 24) {
-        await prisma.followUpLog.create({ data: { ...logBase, decision: "ventana_cerrada", razonIA: "Ventana Meta de 24h expirada" } });
+        const yaLogueado = await prisma.followUpLog.findFirst({
+          where: {
+            contactId: contact.id,
+            stageId: stage.id,
+            decision: "ventana_cerrada",
+            creadoAt: { gte: new Date(now.getTime() - DAY_MS) },
+          },
+          select: { id: true },
+        });
+        if (!yaLogueado) {
+          await prisma.followUpLog.create({ data: { ...logBase, decision: "ventana_cerrada", razonIA: "Ventana Meta de 24h expirada" } });
+        }
         return { contactId: contact.id, decision: "ventana_cerrada" };
       }
     }
 
-    // PASO 3.5: Verificar actividad reciente en los últimos 7 días
+    // PASO 3.5: Actividad reciente. Envíos y sugerencias bloquean 7 días;
+    // 'ia_descarto'/'error' bloquean 24h — sin esto, un contacto descartado
+    // por la IA se re-analizaba con GPT en CADA corrida del cron (96/día),
+    // para siempre: puro gasto.
     const actividadReciente = await prisma.followUpLog.findFirst({
       where: {
         contactId: contact.id,
         stageId: stage.id,
-        creadoAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
         OR: [
-          { decision: "omitido", aprobado: null },  // sugerencia pendiente de aprobar
-          { decision: "enviado" },                   // ya enviado automáticamente
-          { decision: "omitido", aprobado: true },   // aprobado desde email/dashboard
+          { creadoAt: { gte: new Date(now.getTime() - 7 * DAY_MS) }, decision: "enviado" },
+          { creadoAt: { gte: new Date(now.getTime() - 7 * DAY_MS) }, decision: "omitido", aprobado: null },
+          { creadoAt: { gte: new Date(now.getTime() - 7 * DAY_MS) }, decision: "omitido", aprobado: true },
+          { creadoAt: { gte: new Date(now.getTime() - DAY_MS) }, decision: { in: ["ia_descarto", "error"] } },
         ],
       },
       select: { id: true },
     });
     if (actividadReciente) {
-      return { contactId: contact.id, decision: "omitido", razonIA: "Actividad reciente en los últimos 7 días" };
+      return { contactId: contact.id, decision: "omitido", razonIA: "Actividad reciente" };
+    }
+
+    // PASO 3.6: Bot pausado (/off en ESTATUS) = un humano tomó la conversación
+    // o el contacto pidió no ser molestado — no interrumpir con seguimientos.
+    // Fail-closed: si no se puede verificar, mejor no enviar.
+    try {
+      const botActivo = await getBotStatus(
+        contact.instanciaId,
+        contact.jidCompleto ?? contact.uidUsuario,
+      );
+      if (!botActivo) {
+        return { contactId: contact.id, decision: "omitido", razonIA: "Bot pausado para este contacto" };
+      }
+    } catch {
+      return { contactId: contact.id, decision: "omitido", razonIA: "No se pudo verificar la pausa del bot" };
     }
 
     // PASO 4: Análisis con GPT
@@ -209,6 +251,9 @@ Guía de tono/estilo (definida por el negocio):
 REGLA CRÍTICA — cambios de etapa:
 Solo sugiere cambioEtapa=true si el ÚLTIMO mensaje del historial es del USUARIO (rol='user'). Si el último mensaje es del bot/agente, el usuario no ha reaccionado — cambioEtapa=false siempre.
 
+REGLA CRÍTICA — no inventar:
+PROHIBIDO mencionar precios, descuentos, promociones, tiempos de entrega, disponibilidad o cualquier dato o compromiso que NO aparezca textualmente en el historial de la conversación. Si el negocio no lo dijo en la conversación, tú no lo dices. Ante la duda, haz una pregunta abierta en lugar de afirmar algo.
+
 Responde ÚNICAMENTE con JSON válido sin texto adicional:
 {
   "enviar": true | false,
@@ -255,7 +300,10 @@ Criterios para enviar=false:
         ],
       });
       const raw = completion.choices[0]?.message?.content ?? "";
-      aiResponse = JSON.parse(raw) as AIResponse;
+      const parsed = JSON.parse(raw) as AIResponse;
+      if (typeof parsed.enviar !== "boolean") throw new Error("Campo 'enviar' inválido");
+      if (typeof parsed.mensajeGenerado !== "string") parsed.mensajeGenerado = null;
+      aiResponse = parsed;
     } catch {
       await prisma.followUpLog.create({ data: { ...logBase, decision: "error", razonIA: "Respuesta IA inválida" } });
       return { contactId: contact.id, decision: "error", razonIA: "Respuesta IA inválida" };
@@ -268,10 +316,14 @@ Criterios para enviar=false:
     }
 
     // Usar mensaje generado por IA; si no, caer en la guía de tono como fallback
-    const mensajeEnviado = aiResponse.mensajeGenerado ?? stage.mensajeSeguimiento ?? null;
+    let mensajeEnviado = aiResponse.mensajeGenerado?.trim() || stage.mensajeSeguimiento || null;
     if (!mensajeEnviado) {
       await prisma.followUpLog.create({ data: { ...logBase, decision: "ia_descarto", razonIA: "Sin mensaje disponible", etapaDetectada: aiResponse.etapaDetectada } });
       return { contactId: contact.id, decision: "ia_descarto", razonIA: "Sin mensaje disponible", etapaDetectada: aiResponse.etapaDetectada };
+    }
+    // El límite de 300 chars solo se le PIDE al modelo — aquí se garantiza.
+    if (mensajeEnviado.length > 320) {
+      mensajeEnviado = `${mensajeEnviado.slice(0, 300).trimEnd()}…`;
     }
 
     if (config.modoEnvio === "manual") {
@@ -319,10 +371,26 @@ Criterios para enviar=false:
       return { contactId: contact.id, decision: "omitido", razonIA: aiResponse.razon, etapaDetectada: aiResponse.etapaDetectada };
     }
 
-    // Modo automático: enviar
+    // Modo automático: re-checar que el contacto no haya respondido mientras
+    // la IA generaba (la ventana entre el PASO 1 y aquí son varios segundos —
+    // mandar "¿sigues ahí?" justo después de que contestó destruye confianza).
+    const respondioDespues = await prisma.message.findFirst({
+      where: {
+        instanciaId: contact.instanciaId,
+        uidUsuario: contact.uidUsuario,
+        rol: "user",
+        enviadoAt: { gt: lastUserMsg.enviadoAt },
+      },
+      select: { id: true },
+    });
+    if (respondioDespues) {
+      return { contactId: contact.id, decision: "omitido", razonIA: "El contacto respondió durante el análisis" };
+    }
+
     try {
       if (contact.canal === "whatsapp") {
-        await sendWhatsApp(contact.instanciaId, contact.uidUsuario, mensajeEnviado);
+        const destino = contact.jidCompleto ?? `${contact.uidUsuario}@s.whatsapp.net`;
+        await sendWhatsApp(contact.instanciaId, destino, mensajeEnviado);
       } else {
         const inst = await prisma.businessInstance.findFirst({
           where: { instanciaId: contact.instanciaId, canal: contact.canal },
@@ -340,7 +408,7 @@ Criterios para enviar=false:
     // PASO 6: Insertar en memoria del bot
     if (business.tablaMemoria) {
       try {
-        await insertBotMemory(business.tablaMemoria, contact.uidUsuario, contact.canal, "ai", mensajeEnviado);
+        await insertBotMemory(business.tablaMemoria, contact.uidUsuario, contact.canal, "ai", mensajeEnviado, contact.jidCompleto);
       } catch {
         // skip silencioso
       }
@@ -366,11 +434,13 @@ Criterios para enviar=false:
       },
     });
 
-    // PASO 8: Actualizar etapa si la IA detectó cambio
+    // PASO 8: Actualizar etapa si la IA detectó cambio (match tolerante a
+    // mayúsculas/espacios; respeta asignaciones manuales recientes vía origen 'ia')
     if (aiResponse.cambioEtapa && aiResponse.etapaDetectada) {
-      const newStage = business.etapas.find((e) => e.nombre === aiResponse.etapaDetectada);
+      const normDetectada = aiResponse.etapaDetectada.trim().toLowerCase();
+      const newStage = business.etapas.find((e) => e.nombre.trim().toLowerCase() === normDetectada);
       if (newStage) {
-        await upsertContactStageOptimistic(contact.id, business.id, newStage.id, new Date());
+        await upsertContactStageOptimistic(contact.id, business.id, newStage.id, new Date(), "ia");
       }
     }
 
@@ -391,7 +461,7 @@ Criterios para enviar=false:
   }
 }
 
-async function processInBatches<T>(items: T[], fn: (item: T) => Promise<ProcessResult>, batchSize = 3): Promise<ProcessResult[]> {
+async function processInBatches<T>(items: T[], fn: (item: T) => Promise<ProcessResult>, batchSize = 5): Promise<ProcessResult[]> {
   const results: ProcessResult[] = [];
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -434,7 +504,7 @@ export async function runFollowUpJob(): Promise<FollowUpResult> {
             contactos: {
               select: {
                 contact: {
-                  select: { id: true, uidUsuario: true, instanciaId: true, canal: true, nombre: true },
+                  select: { id: true, uidUsuario: true, instanciaId: true, canal: true, nombre: true, jidCompleto: true },
                 },
               },
             },
@@ -445,7 +515,7 @@ export async function runFollowUpJob(): Promise<FollowUpResult> {
 
     // Flattened list of all (contact, stage, business, config) tuples
     type WorkItem = {
-      contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null };
+      contact: { id: string; uidUsuario: string; instanciaId: string; canal: string; nombre?: string | null; jidCompleto?: string | null };
       stage: { id: string; nombre: string; mensajeSeguimiento: string | null };
       business: { id: string; nombre: string; tablaMemoria: string | null; etapas: { id: string; nombre: string; descripcion: string | null }[] };
       config: { modoEnvio: string; tiempoInactividad: number; maxEnviosPorDia: number; maxEnviosTotal: number | null };

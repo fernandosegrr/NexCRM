@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { signFollowUpLink } from "@/lib/follow-up-link";
 
 export async function sendEmail({
   to,
@@ -682,7 +683,10 @@ export function buildSuggestionHtml({
   // Ambos botones llevan a la página de confirmación (requiere clic real +
   // POST) en vez de ejecutar la acción directo en un GET — un GET directo es
   // vulnerable a prefetch de clientes de correo/escáneres de seguridad.
-  const approveUrl = `${appUrl}/follow-up/approve?logId=${encodeURIComponent(logId)}`;
+  // El token HMAC autoriza editar el mensaje antes de enviar (sin él, solo
+  // se puede aprobar el texto original o descartar).
+  const token = signFollowUpLink(logId);
+  const approveUrl = `${appUrl}/follow-up/approve?logId=${encodeURIComponent(logId)}${token ? `&t=${token}` : ""}`;
   const discardUrl = approveUrl;
 
   const canalLabel =

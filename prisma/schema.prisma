@@ -142,6 +142,7 @@ model Contact {
   sugerenciaRazon   String?
   clasificadoAt     DateTime? // marca de última clasificación (throttle)
   followUpLogs      FollowUpLog[]
+  stageFeedback     StageSuggestionFeedback[]
 
   @@unique([instanciaId, uidUsuario])
   @@index([sugerenciaStageId])
@@ -192,9 +193,30 @@ model ContactStage {
   stage      FunnelStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
   businessId String
   asignadoAt DateTime    @default(now())
+  // 'humano' | 'ia' — la IA no pisa asignaciones manuales recientes (ver contact-stage.ts).
+  // Default 'humano' para filas legacy: conservador (protege contra sobrescritura IA).
+  asignadoPor String     @default("humano")
 
   @@unique([contactId, businessId])
   @@map("contact_stages")
+}
+
+// Feedback humano sobre sugerencias de etapa de la IA (aceptada/descartada).
+// Alimenta el prompt del clasificador (no re-sugerir lo recién rechazado) y
+// futuras métricas de acierto. stageNombre es snapshot: sobrevive renames/borrados.
+model StageSuggestionFeedback {
+  id          String   @id @default(uuid())
+  contactId   String
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  businessId  String
+  stageId     String
+  stageNombre String
+  accion      String // 'aplicada' | 'descartada'
+  creadoAt    DateTime @default(now())
+
+  @@index([contactId, creadoAt(sort: Desc)])
+  @@index([businessId, creadoAt(sort: Desc)])
+  @@map("stage_suggestion_feedback")
 }
 
 model FollowUpConfig {

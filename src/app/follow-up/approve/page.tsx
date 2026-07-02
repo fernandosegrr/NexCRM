@@ -22,6 +22,7 @@ export default async function ApprovePage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const logId = typeof searchParams.logId === "string" ? searchParams.logId : undefined;
+  const token = typeof searchParams.t === "string" ? searchParams.t : null;
   if (!logId) {
     return <StatusPage icon="⚠️" title="Enlace inválido" body="No se encontró el identificador de la sugerencia." />;
   }
@@ -88,7 +89,7 @@ export default async function ApprovePage({
         </div>
       </div>
 
-      <ApproveForm log={logData} />
+      <ApproveForm log={logData} token={token} />
 
       <p style={{ marginTop: 24, fontSize: 11, color: "#9ca3af", textAlign: "center" }}>
         NexAI CRM · Este enlace es de un solo uso

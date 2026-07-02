@@ -37,7 +37,7 @@ async function maybeAssignFirstStage(
 
   await prisma.contactStage.upsert({
     where: { contactId_businessId: { contactId: contact.id, businessId } },
-    create: { contactId: contact.id, stageId: firstStage.id, businessId },
+    create: { contactId: contact.id, stageId: firstStage.id, businessId, asignadoPor: "ia" },
     update: {},
   });
 
@@ -335,6 +335,9 @@ export async function POST(req: NextRequest) {
                 inst.canal,
                 "human",
                 d.contenido!,
+                // JID real de este mensaje (puede ser @lid) — el session_id del
+                // bot debe coincidir con el que n8n usa, no un sufijo adivinado.
+                inst.canal === "whatsapp" && d.uidUsuario.includes("@") ? d.uidUsuario : null,
               );
             }
           } catch (err) {

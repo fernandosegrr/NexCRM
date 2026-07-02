@@ -268,6 +268,14 @@ function StageDialog({
                       <SelectItem value="1440">24 horas</SelectItem>
                     </SelectContent>
                   </Select>
+                  {followUp.tiempoInactividad >= 1440 && (
+                    <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-500">
+                      ⚠️ Con 24 horas, los seguimientos de Instagram/Messenger no
+                      podrán enviarse: Meta solo permite responder dentro de las 24h
+                      posteriores al último mensaje del cliente. WhatsApp no tiene
+                      esta restricción.
+                    </p>
+                  )}
                 </div>
 
                 {/* Límites */}
@@ -307,6 +315,10 @@ function StageDialog({
                     </Select>
                   </div>
                 </div>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Tras enviar (o sugerir) un seguimiento, el contacto no se vuelve a
+                  evaluar en esta etapa durante 7 días — protección anti-spam.
+                </p>
               </div>
             )}
           </div>

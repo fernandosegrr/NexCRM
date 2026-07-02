@@ -164,6 +164,27 @@ Detalle de placement de nodos: `docs/integracion-n8n.md`.
   IGAA/EAAW no son intercambiables entre hosts.
 - **`rol:page`** = eco de Meta de mensajes salientes (bot o human). No es un mensaje del usuario.
   Se deduplica en ingesta comparando contenido+ventana de tiempo.
+- **Nunca armar `@s.whatsapp.net` a mano al enviar/escribir memoria**: usar
+  `Contact.jidCompleto` (coexisten `@s.whatsapp.net` y `@lid`). Aplica a envíos,
+  ESTATUS y `insertBotMemory`.
+
+## Reglas del embudo IA (clasificador + follow-up)
+- **ContactStage.asignadoPor** (`'humano' | 'ia'`): la IA (clasificador y follow-up)
+  NO pisa asignaciones con `asignadoPor='humano'` de las últimas 48h — ver
+  `contact-stage.ts`. Toda escritura manual/aplicar-sugerencia marca `'humano'`.
+- **Histéresis en modo automático**: el clasificador solo mueve si la MISMA etapa
+  se detecta en 2 clasificaciones consecutivas con confianza alta (anti ping-pong).
+- **Follow-up respeta la pausa del bot**: consulta ESTATUS (`getBotStatus`) antes
+  de llamar a GPT; fail-closed si la BD de n8n no responde.
+- **PASO 3.5 del follow-up**: envíos/sugerencias bloquean 7 días; `ia_descarto`/
+  `error` bloquean 24h (sin esto, GPT se llamaba 96×/día por contacto estancado).
+- **Aprobaciones de follow-up**: claim atómico sobre `aprobado`, re-check de que el
+  contacto no respondió y de la ventana Meta 24h. El link de email lleva token HMAC
+  (`follow-up-link.ts`); sin token/sesión no se acepta texto editado.
+- **StageSuggestionFeedback**: registra aplicar/descartar sugerencias de etapa; el
+  clasificador incluye los descartes recientes en el prompt (no re-sugerir).
+- **Cap diario clasificador**: `FUNNEL_AI_DAILY_CAP` (default 300/negocio/día), en
+  memoria de proceso, solo cuenta llamadas exitosas, aplica también a `force`.
 
 ---
 

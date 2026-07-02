@@ -491,8 +491,8 @@ export async function upsertContactStage(
     } else {
       await prisma.contactStage.upsert({
         where: { contactId_businessId: { contactId: contact.id, businessId } },
-        create: { contactId: contact.id, stageId, businessId },
-        update: { stageId, asignadoAt: new Date() },
+        create: { contactId: contact.id, stageId, businessId, asignadoPor: "humano" },
+        update: { stageId, asignadoAt: new Date(), asignadoPor: "humano" },
       });
     }
 
@@ -546,21 +546,34 @@ export async function applyStageSuggestion(
 
     const stage = await prisma.funnelStage.findUnique({
       where: { id: contact.sugerenciaStageId },
-      select: { businessId: true },
+      select: { businessId: true, nombre: true },
     });
     if (!stage || stage.businessId !== businessId) {
       return { ok: false, error: "Etapa sugerida inválida." };
     }
 
+    // Aceptar una sugerencia es una decisión humana: cuenta como asignación manual.
     await prisma.contactStage.upsert({
       where: { contactId_businessId: { contactId: contact.id, businessId } },
-      create: { contactId: contact.id, stageId: contact.sugerenciaStageId, businessId },
-      update: { stageId: contact.sugerenciaStageId, asignadoAt: new Date() },
+      create: { contactId: contact.id, stageId: contact.sugerenciaStageId, businessId, asignadoPor: "humano" },
+      update: { stageId: contact.sugerenciaStageId, asignadoAt: new Date(), asignadoPor: "humano" },
     });
     await prisma.contact.update({
       where: { id: contact.id },
       data: { sugerenciaStageId: null, sugerenciaRazon: null },
     });
+    // Registrar el feedback (alimenta métricas y el prompt del clasificador).
+    await prisma.stageSuggestionFeedback
+      .create({
+        data: {
+          contactId: contact.id,
+          businessId,
+          stageId: contact.sugerenciaStageId,
+          stageNombre: stage.nombre,
+          accion: "aplicada",
+        },
+      })
+      .catch(() => {});
 
     revalidatePath("/dashboard");
     return { ok: true };
@@ -625,10 +638,37 @@ export async function dismissStageSuggestion(
   }
 
   try {
+    // Leer la sugerencia antes de anularla para dejar registro del rechazo —
+    // sin esto, los errores repetidos del clasificador son invisibles y la IA
+    // vuelve a sugerir lo mismo en la siguiente clasificación.
+    const contact = await prisma.contact.findUnique({
+      where: { instanciaId_uidUsuario: { instanciaId, uidUsuario } },
+      select: {
+        id: true,
+        sugerenciaStageId: true,
+        sugerenciaStage: { select: { nombre: true } },
+      },
+    });
+
     await prisma.contact.updateMany({
       where: { instanciaId, uidUsuario },
       data: { sugerenciaStageId: null, sugerenciaRazon: null },
     });
+
+    if (contact?.sugerenciaStageId) {
+      await prisma.stageSuggestionFeedback
+        .create({
+          data: {
+            contactId: contact.id,
+            businessId,
+            stageId: contact.sugerenciaStageId,
+            stageNombre: contact.sugerenciaStage?.nombre ?? "",
+            accion: "descartada",
+          },
+        })
+        .catch(() => {});
+    }
+
     revalidatePath("/dashboard");
     return { ok: true };
   } catch {
@@ -655,6 +695,25 @@ export async function updateModoClasificacion(
       where: { id: businessId },
       data: { modoClasificacion: modo },
     });
+
+    // Al pasar a automático, limpiar sugerencias pendientes del modo anterior:
+    // el modo automático reusa sugerenciaStageId como candidato de histéresis
+    // (2 detecciones consecutivas antes de mover) y una sugerencia heredada
+    // podría "confirmar" un movimiento en la primera detección.
+    if (modo === "automatico") {
+      const instances = await prisma.businessInstance.findMany({
+        where: { businessId },
+        select: { instanciaId: true },
+      });
+      const instanciaIds = instances.map((i) => i.instanciaId);
+      if (instanciaIds.length > 0) {
+        await prisma.contact.updateMany({
+          where: { instanciaId: { in: instanciaIds }, sugerenciaStageId: { not: null } },
+          data: { sugerenciaStageId: null, sugerenciaRazon: null },
+        });
+      }
+    }
+
     revalidatePath(`/admin/negocios/${businessId}`);
     revalidatePath("/dashboard/embudo");
     return { ok: true };

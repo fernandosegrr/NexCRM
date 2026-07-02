@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { n8nPool } from "@/lib/n8n";
-import { isFollowUpLogExpired } from "@/lib/follow-up-link";
+import { insertBotMemory } from "@/lib/bot-memory";
+import { isFollowUpLogExpired, verifyFollowUpLink } from "@/lib/follow-up-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,9 @@ function htmlPage(
   });
 }
 
-async function sendWhatsApp(instanciaId: string, uidUsuario: string, text: string): Promise<void> {
+// `destino` es el JID real (Contact.jidCompleto puede ser @lid) — nunca
+// reconstruir el sufijo a mano.
+async function sendWhatsApp(instanciaId: string, destino: string, text: string): Promise<void> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -58,7 +61,7 @@ async function sendWhatsApp(instanciaId: string, uidUsuario: string, text: strin
       {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-        body: JSON.stringify({ number: `${uidUsuario}@s.whatsapp.net`, text }),
+        body: JSON.stringify({ number: destino, text }),
         signal: ctrl.signal,
       },
     );
@@ -92,24 +95,15 @@ async function sendMeta(pageId: string, token: string, uidUsuario: string, text:
   }
 }
 
-async function insertBotMemory(tablaMemoria: string, uidUsuario: string, canal: string, text: string): Promise<void> {
-  if (!/^[a-zA-Z0-9_]+$/.test(tablaMemoria)) return;
-  const sessionId = canal === "whatsapp" ? `${uidUsuario}@s.whatsapp.net` : uidUsuario;
-  await n8nPool.query(
-    `INSERT INTO "${tablaMemoria}" (session_id, message) VALUES ($1, $2)`,
-    [sessionId, JSON.stringify({ type: "ai", content: text })],
-  );
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  let body: { logId?: string; action?: string; mensaje?: string };
+  let body: { logId?: string; action?: string; mensaje?: string; t?: string };
   try {
-    body = (await req.json()) as { logId?: string; action?: string; mensaje?: string };
+    body = (await req.json()) as { logId?: string; action?: string; mensaje?: string; t?: string };
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
 
-  const { logId, action, mensaje } = body;
+  const { logId, action, mensaje, t } = body;
   if (!logId || (action !== "approve" && action !== "discard")) {
     return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 });
   }
@@ -119,6 +113,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     select: {
       id: true,
       businessId: true,
+      contactId: true,
       stageId: true,
       canal: true,
       uidUsuario: true,
@@ -126,7 +121,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       mensajeEnviado: true,
       aprobado: true,
       creadoAt: true,
-      contact: { select: { nombre: true } },
+      contact: { select: { nombre: true, jidCompleto: true } },
     },
   });
 
@@ -137,29 +132,87 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   if (action === "discard") {
-    await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
+    const discarded = await prisma.followUpLog.updateMany({
+      where: { id: logId, aprobado: null },
+      data: { aprobado: false },
+    });
+    if (discarded.count === 0) {
+      return NextResponse.json({ error: "Ya procesada" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true, action: "discard" });
   }
 
-  // approve
-  const textoEnviar = mensaje?.trim() || log.mensajeEnviado;
+  // approve — el texto EDITADO solo se acepta con autorización real (sesión
+  // del negocio o token HMAC del email). Un logId filtrado (reenvío, logs de
+  // proxy, historial) no debe permitir enviar texto arbitrario al cliente
+  // final por el canal del negocio. Sin autorización, se envía el texto
+  // original generado (links viejos sin token siguen funcionando así).
+  const session = await auth().catch(() => null);
+  const sessionOk =
+    !!session?.user &&
+    (session.user.rol === "ADMIN" || session.user.businessId === log.businessId);
+  const tokenOk = verifyFollowUpLink(logId, t);
+  const puedeEditar = sessionOk || tokenOk;
+
+  const textoEnviar = (puedeEditar ? mensaje?.trim() : undefined) || log.mensajeEnviado;
   if (!textoEnviar) return NextResponse.json({ error: "Sin mensaje" }, { status: 400 });
+
+  // Claim atómico anti doble-click/doble-envío.
+  const claim = await prisma.followUpLog.updateMany({
+    where: { id: logId, aprobado: null },
+    data: { aprobado: true },
+  });
+  if (claim.count === 0) return NextResponse.json({ error: "Ya procesada" }, { status: 409 });
+
+  // La sugerencia pudo generarse hace días: re-verificar antes de enviar.
+  const lastUserMsg = await prisma.message.findFirst({
+    where: { instanciaId: log.instanciaId, uidUsuario: log.uidUsuario, rol: "user" },
+    orderBy: { enviadoAt: "desc" },
+    select: { enviadoAt: true },
+  });
+
+  if (lastUserMsg && lastUserMsg.enviadoAt > log.creadoAt) {
+    await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
+    return NextResponse.json(
+      { error: "El contacto ya respondió después de esta sugerencia. Revisa la conversación en el CRM antes de contactarlo." },
+      { status: 409 },
+    );
+  }
+
+  if (log.canal === "instagram" || log.canal === "messenger") {
+    const hoursSince = lastUserMsg
+      ? (Date.now() - lastUserMsg.enviadoAt.getTime()) / 3_600_000
+      : Infinity;
+    if (hoursSince > 24) {
+      await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: false } });
+      return NextResponse.json(
+        { error: "La ventana de 24h de Meta ya cerró para este contacto; el mensaje no puede enviarse." },
+        { status: 410 },
+      );
+    }
+  }
 
   try {
     if (log.canal === "whatsapp") {
-      await sendWhatsApp(log.instanciaId, log.uidUsuario, textoEnviar);
+      const destino = log.contact?.jidCompleto ?? `${log.uidUsuario}@s.whatsapp.net`;
+      await sendWhatsApp(log.instanciaId, destino, textoEnviar);
     } else {
       const inst = await prisma.businessInstance.findFirst({
         where: { instanciaId: log.instanciaId, canal: log.canal },
         select: { metaPageId: true, metaPageAccessToken: true },
       });
       if (!inst?.metaPageAccessToken || !inst.metaPageId) {
+        await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: null } });
         return NextResponse.json({ error: "Sin token Meta configurado" }, { status: 422 });
       }
       await sendMeta(inst.metaPageId, inst.metaPageAccessToken, log.uidUsuario, textoEnviar);
     }
   } catch (e) {
     console.error("[approve-link POST] Error al enviar:", e);
+    // Liberar el claim: el envío falló, la sugerencia sigue pendiente.
+    await prisma.followUpLog
+      .update({ where: { id: logId }, data: { aprobado: null } })
+      .catch(() => {});
     return NextResponse.json({ error: "Error al enviar el mensaje" }, { status: 500 });
   }
 
@@ -170,7 +223,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (business?.tablaMemoria) {
     try {
-      await insertBotMemory(business.tablaMemoria, log.uidUsuario, log.canal, textoEnviar);
+      await insertBotMemory(
+        business.tablaMemoria,
+        log.uidUsuario,
+        log.canal,
+        "ai",
+        textoEnviar,
+        log.contact?.jidCompleto,
+      );
     } catch {
       // skip silencioso
     }
@@ -194,7 +254,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     },
   });
 
-  await prisma.followUpLog.update({ where: { id: logId }, data: { aprobado: true } });
+  // Limpiar los pendientes restantes del mismo contacto
+  await prisma.followUpLog.updateMany({
+    where: { contactId: log.contactId, businessId: log.businessId, aprobado: null },
+    data: { aprobado: false },
+  });
+
   return NextResponse.json({ ok: true, action: "approve" });
 }
 
@@ -208,10 +273,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
   const logId = searchParams.get("logId");
+  const t = searchParams.get("t");
 
   if (!logId) {
     return htmlPage("⚠️", "Enlace inválido", "Los parámetros del enlace son incorrectos.", "#dc2626");
   }
 
-  return NextResponse.redirect(`${APP_URL}/follow-up/approve?logId=${encodeURIComponent(logId)}`);
+  const qs = `logId=${encodeURIComponent(logId)}${t ? `&t=${encodeURIComponent(t)}` : ""}`;
+  return NextResponse.redirect(`${APP_URL}/follow-up/approve?${qs}`);
 }
